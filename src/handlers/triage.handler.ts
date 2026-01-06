@@ -1,12 +1,8 @@
-/**
- * Triage Handler
- *
- * Entry point for external systems (API, function, service).
- * Keeps transport concerns separate from AI logic.
- */
-
 import { runTriagePipeline, TriageInput } from "../pipelines/triage.pipeline";
+import { MockAIAdapter } from "../adapters/mock.adapter";
+
+const ai = new MockAIAdapter();
 
 export async function handleTriageRequest(input: TriageInput) {
-  return runTriagePipeline(input);
+  return runTriagePipeline(input, ai);
 }
