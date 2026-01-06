@@ -1,13 +1,4 @@
-/**
- * Triage Pipeline
- *
- * Responsible for orchestrating AI reasoning for patient triage.
- * This pipeline prepares input, selects prompts, and interprets AI output.
- *
- * NOTE:
- * - No cloud SDKs here
- * - No direct model calls yet
- */
+import { AIAdapter } from "../adapters/ai.adapter";
 
 export type TriageInput = {
   symptoms: string;
@@ -22,11 +13,15 @@ export type TriageOutput = {
 };
 
 export async function runTriagePipeline(
-  input: TriageInput
+  input: TriageInput,
+  ai: AIAdapter
 ): Promise<TriageOutput> {
-  // Placeholder logic – AI call will be injected later
+  const completion = await ai.generateCompletion({
+    prompt: input.symptoms,
+  });
+
   return {
-    soan: "SOAN output placeholder",
+    soan: completion.text,
     riskLevel: "medium",
   };
 }
