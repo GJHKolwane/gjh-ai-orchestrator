@@ -4,14 +4,35 @@ import {
   ConsoleAuditLogger,
   createAuditEvent
 } from "./audit.logger.js";
+import { AIMode } from "./ai.modes.js";
+import { assertAIModeAllows } from "./ai.guards.js";
 
 /**
  * Orchestrator Input
- * Defines who is invoking AI and why
+ * Defines who is invoking AI, under what authority, and why
  */
 export interface OrchestratorInput {
   consultationId: string;
   actor: "AI_TRIAGE" | "NURSE" | "DOCTOR";
+
+  /**
+   * AI operational mode (HARD GOVERNANCE)
+   * - TRIAGE        → Phase 1
+   * - SAFETY_ASSIST → Phase 1.5
+   * - INVESTIGATIVE → Phase 2 (Doctor only)
+   */
+  mode: AIMode;
+
+  /**
+   * Intent explicitly declares what the AI is being asked to do.
+   * Guards will BLOCK disallowed intents.
+   */
+  intent?: {
+    diagnosis?: boolean;
+    comparison?: boolean;
+    procedural?: boolean;
+  };
+
   prompt: string;
 }
 
@@ -28,8 +49,8 @@ export interface OrchestratorOutput {
  * Core AI Orchestrator
  *
  * Responsibilities:
+ * - Enforce AI mode boundaries
  * - Route AI calls via adapters
- * - Enforce governance boundaries
  * - Emit full audit trail
  *
  * This file NEVER talks directly to cloud providers.
@@ -38,37 +59,52 @@ export async function orchestrateAI(
   input: OrchestratorInput,
   auditLogger: AuditLogger = new ConsoleAuditLogger()
 ): Promise<OrchestratorOutput> {
-  const { consultationId, actor, prompt } = input;
+  const {
+    consultationId,
+    actor,
+    mode,
+    intent = {},
+    prompt
+  } = input;
 
-  // 1️⃣ Audit: input received
+  // 🔒 1️⃣ HARD GOVERNANCE CHECK (FAIL FAST)
+  assertAIModeAllows(mode, intent);
+
+  // 🧾 2️⃣ Audit: AI invocation requested
   await auditLogger.log(
     createAuditEvent(
       consultationId,
       actor,
       "INPUT_RECEIVED",
-      "AI input received",
-      { prompt }
+      `AI invoked in mode ${mode}`,
+      {
+        mode,
+        intent
+      }
     )
   );
 
-  // 2️⃣ Resolve AI adapter (Vertex / Mock / Future)
+  // 🧠 3️⃣ Resolve AI adapter (Vertex / Mock / Future)
   const aiAdapter = createAIAdapter();
 
-  // 3️⃣ Generate AI output
+  // ⚙️ 4️⃣ Generate AI output
   const result = await aiAdapter.generateCompletion({ prompt });
 
-  // 4️⃣ Audit: AI suggestion produced
+  // 🧾 5️⃣ Audit: AI suggestion produced
   await auditLogger.log(
     createAuditEvent(
       consultationId,
       "AI_TRIAGE",
       "AI_SUGGESTION",
-      "AI generated suggestion",
-      { output: result.text }
+      "AI generated output",
+      {
+        mode,
+        outputPreview: result.text.slice(0, 300) // preview only, not full payload
+      }
     )
   );
 
-  // 5️⃣ Return governed output
+  // ✅ 6️⃣ Return governed output
   return {
     source: process.env.AI_PROVIDER || "mock",
     timestamp: new Date().toISOString(),
