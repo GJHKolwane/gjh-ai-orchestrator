@@ -1,33 +1,25 @@
 import express from "express";
 import bodyParser from "body-parser";
-import { nurseTriageHandler } from "./handlers/triage.handler";
-
-/**
- * Main HTTP entry point for GJHealth AI Orchestrator
- *
- * This service exposes governed AI pipelines over HTTP.
- */
+import { nurseTriageHandler } from "./handlers/triage.handler.js";
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = Number(process.env.PORT) || 8080;
 
 app.use(bodyParser.json());
 
-/**
- * Health check
- */
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-/**
- * Nurse-first AI triage endpoint
- */
-app.post("/triage/nurse", nurseTriageHandler);
+app.post("/triage/nurse", async (req, res) => {
+  try {
+    await nurseTriageHandler(req, res);
+  } catch (err) {
+    console.error("Unhandled handler error:", err);
+    res.status(500).json({ error: "Unhandled server error" });
+  }
+});
 
-/**
- * Start server
- */
 app.listen(PORT, () => {
   console.log(`🚀 GJHealth AI Orchestrator running on port ${PORT}`);
 });
