@@ -1,12 +1,33 @@
-import { orchestrateAI } from "./orchestrator/ai.orchestrator.js";
+import express from "express";
+import bodyParser from "body-parser";
+import { nurseTriageHandler } from "./handlers/triage.handler";
 
-async function main() {
-  const result = await orchestrateAI(
-    "Give a one-paragraph explanation of GJHealth for a government briefing."
-  );
+/**
+ * Main HTTP entry point for GJHealth AI Orchestrator
+ *
+ * This service exposes governed AI pipelines over HTTP.
+ */
 
-  console.log("\n=== GJHealth AI Output ===\n");
-  console.log(result.output);
-}
+const app = express();
+const PORT = process.env.PORT || 8080;
 
-main().catch(console.error);
+app.use(bodyParser.json());
+
+/**
+ * Health check
+ */
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+/**
+ * Nurse-first AI triage endpoint
+ */
+app.post("/triage/nurse", nurseTriageHandler);
+
+/**
+ * Start server
+ */
+app.listen(PORT, () => {
+  console.log(`🚀 GJHealth AI Orchestrator running on port ${PORT}`);
+});
