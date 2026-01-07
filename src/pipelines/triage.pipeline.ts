@@ -1,5 +1,8 @@
-import { createAIAdapter } from "../adapters/ai.factory";
-import { AICompletionInput } from "../adapters/ai.adapter";
+import { orchestrateAI } from "../orchestrator/ai.orchestrator.js";
+import {
+  ConsoleAuditLogger,
+  createAuditEvent
+} from "../orchestrator/audit.logger.js";
 
 /**
  * ============================
@@ -96,29 +99,41 @@ REQUIRED OUTPUT FORMAT (JSON ONLY):
 export async function runNurseTriagePipeline(
   input: NurseTriageInput
 ): Promise<NurseTriageResult> {
+  const auditLogger = new ConsoleAuditLogger();
+
   // 1️⃣ Build governed prompt
   const prompt = buildNurseTriagePrompt(input);
 
-  // 2️⃣ Prepare AI input
-  const aiInput: AICompletionInput = {
-    prompt,
-  };
+  // 2️⃣ Audit: nurse initiated triage
+  await auditLogger.log(
+    createAuditEvent(
+      input.consultationId,
+      "NURSE",
+      "INPUT_RECEIVED",
+      "Nurse initiated AI triage",
+      { notes: input.nurse.notes }
+    )
+  );
 
-  // 3️⃣ Select AI adapter (mock or vertex)
-  const ai = createAIAdapter();
+  // 3️⃣ Call orchestrator (governed AI entry)
+  const aiResult = await orchestrateAI(
+    {
+      consultationId: input.consultationId,
+      actor: "AI_TRIAGE",
+      prompt
+    },
+    auditLogger
+  );
 
-  // 4️⃣ Execute AI call
-  const completion = await ai.generateCompletion(aiInput);
-
-  // 5️⃣ Parse and validate AI output
+  // 4️⃣ Parse and validate AI output
   let parsed: any;
   try {
-    parsed = JSON.parse(completion.text);
-  } catch (err) {
+    parsed = JSON.parse(aiResult.output);
+  } catch {
     throw new Error("AI output was not valid JSON (governance violation)");
   }
 
-  // 6️⃣ Enforce governance at pipeline level
+  // 5️⃣ Enforce governance at pipeline level
   const result: NurseTriageResult = {
     observations: parsed.observations ?? [],
     considerations: parsed.considerations ?? [],
@@ -129,9 +144,23 @@ export async function runNurseTriagePipeline(
     governance: {
       diagnosticAllowed: false,
       humanInControl: "nurse",
-      escalationRecommended: Boolean(parsed.escalationRecommended),
-    },
+      escalationRecommended: Boolean(parsed.escalationRecommended)
+    }
   };
+
+  // 6️⃣ Audit: nurse-reviewed AI output
+  await auditLogger.log(
+    createAuditEvent(
+      input.consultationId,
+      "NURSE",
+      "NURSE_REVIEW",
+      "Nurse reviewed AI triage output",
+      {
+        escalationRecommended: result.governance.escalationRecommended,
+        riskLevel: result.riskLevel
+      }
+    )
+  );
 
   return result;
 }
