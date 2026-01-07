@@ -1,16 +1,20 @@
-import { AIAdapter, AICompletionInput, AICompletionOutput } from "./ai.adapter";
+import {
+  AIAdapter,
+  AICompletionInput,
+  AICompletionOutput,
+} from "./ai.adapter";
 
 /**
  * Vertex AI Adapter
  *
  * Real AI implementation using Google Vertex AI (Gemini).
- * This adapter is injected at runtime.
+ * The model is injected by the AI factory.
  *
  * IMPORTANT:
  * - No credentials are stored here
- * - Auth is handled by the environment (ADC)
+ * - Auth is handled by the environment (ADC / workload identity)
+ * - No clinical or governance logic lives here
  */
-
 export class VertexAIAdapter implements AIAdapter {
   private model: any;
 
@@ -27,4 +31,4 @@ export class VertexAIAdapter implements AIAdapter {
 
     return { text };
   }
-      }
+}
