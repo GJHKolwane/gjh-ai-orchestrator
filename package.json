@@ -2,9 +2,12 @@
   "name": "gjh-ai-orchestrator",
   "version": "0.1.0",
   "type": "module",
-  "scripts": {
-    "dev": "tsx src/index.ts"
-  },
+ "scripts": {
+  "build": "tsc",
+  "start": "node dist/index.js",
+  "dev": "tsx src/index.ts"
+},
+
   "dependencies": {
     "@google-cloud/vertexai": "^1.38.0",
     "express": "^4.19.2",
