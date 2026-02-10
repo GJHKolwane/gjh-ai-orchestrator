@@ -2,18 +2,10 @@ import {
   AIAdapter,
   AICompletionInput,
   AICompletionOutput,
-} from "./ai.adapter";
+} from "./ai.adapter.js";
 
 /**
  * Vertex AI Adapter
- *
- * Real AI implementation using Google Vertex AI (Gemini).
- * The model is injected by the AI factory.
- *
- * IMPORTANT:
- * - No credentials are stored here
- * - Auth is handled by the environment (ADC / workload identity)
- * - No clinical or governance logic lives here
  */
 export class VertexAIAdapter implements AIAdapter {
   private model: any;
@@ -25,9 +17,26 @@ export class VertexAIAdapter implements AIAdapter {
   async generateCompletion(
     input: AICompletionInput
   ): Promise<AICompletionOutput> {
-    const result = await this.model.generateContent(input.prompt);
+
+    if (!input.text) {
+      throw new Error("VertexAIAdapter requires input.text");
+    }
+
+    const result = await this.model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: input.text }]
+        }
+      ]
+    });
+
     const response = await result.response;
-    const text = response.text();
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+      throw new Error("Vertex returned empty response");
+    }
 
     return { text };
   }
