@@ -1,4 +1,4 @@
-import { AIMode, AIModeCapabilities } from "./ai.modes";
+import { AIMode, AIModeCapabilities } from "./ai.modes.js";
 
 /**
  * Validates whether a requested AI action is allowed
