@@ -9,7 +9,7 @@
 },
 
   "dependencies": {
-    "@google-cloud/vertexai": "^1.38.0",
+    "@google-cloud/vertexai": "^1.10.0",
     "express": "^4.19.2",
     "body-parser": "^1.20.2"
   },
