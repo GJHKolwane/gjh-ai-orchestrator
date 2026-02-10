@@ -1,17 +1,8 @@
-import { AIAdapter } from "./ai.adapter";
-import { MockAIAdapter } from "./mock.adapter";
-import { VertexAIAdapter } from "./vertex.adapter";
+import { AIAdapter } from "./ai.adapter.js";
+import { MockAIAdapter } from "./mock.adapter.js";
+import { VertexAIAdapter } from "./vertex.adapter.js";
 import { VertexAI } from "@google-cloud/vertexai";
 
-/**
- * AI Factory
- *
- * Responsible for instantiating the correct AI adapter
- * based on runtime environment configuration.
- *
- * Default = mock (safe)
- * Explicit opt-in required for real AI providers.
- */
 export function createAIAdapter(): AIAdapter {
   const provider = process.env.AI_PROVIDER || "mock";
 
@@ -28,11 +19,11 @@ export function createAIAdapter(): AIAdapter {
 
       const vertex = new VertexAI({
         project,
-        location,
+        location
       });
 
       const model = vertex.getGenerativeModel({
-        model: "gemini-3-flash",
+        model: "gemini-1.5-flash" // safer model
       });
 
       return new VertexAIAdapter(model);
