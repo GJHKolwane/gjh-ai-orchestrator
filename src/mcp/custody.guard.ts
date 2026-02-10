@@ -1,4 +1,4 @@
-import { ClinicalPhase } from "./clinicalPhases";
+import { ClinicalPhase } from "./clinicalPhases.js";
 
 /**
  * Determines who legally owns patient care
