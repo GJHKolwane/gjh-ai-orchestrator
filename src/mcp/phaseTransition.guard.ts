@@ -1,6 +1,6 @@
-import { ClinicalPhase } from "./clinicalPhases";
-import { PhaseExitType } from "./phaseExits";
-import { PhaseTransitionResult } from "./phaseTransition.types";
+import { ClinicalPhase } from "./clinicalPhases.js";
+import { PhaseExitType } from "./phaseExits.js";
+import { PhaseTransitionResult } from "./phaseTransition.types.js";
 
 /**
  * Enforces legal clinical phase transitions.
