@@ -24,6 +24,11 @@ app.post("/triage/nurse", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+/**
+ * Cloud Run requires:
+ * - Listening on process.env.PORT
+ * - Binding to 0.0.0.0 (not localhost)
+ */
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 GJHealth AI Orchestrator running on port ${PORT}`);
 });
