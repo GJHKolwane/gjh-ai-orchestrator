@@ -1,4 +1,5 @@
 import { orchestrateAI } from "../orchestrator/ai.orchestrator.js";
+import { AIMode } from "../orchestrator/ai.modes.js";
 import {
   ConsoleAuditLogger,
   createAuditEvent
@@ -34,7 +35,7 @@ export interface NurseTriageInput {
 
 export interface NurseTriageResult {
   observations: string[];
-  considerations: string[]; // NON-diagnostic only
+  considerations: string[];
   riskLevel: "low" | "medium" | "high";
   missingInformation: string[];
   suggestedNextSteps: string[];
@@ -48,7 +49,7 @@ export interface NurseTriageResult {
 
 /**
  * ============================
- * PROMPT BUILDER (GOVERNED)
+ * PROMPT BUILDER
  * ============================
  */
 
@@ -56,13 +57,11 @@ function buildNurseTriagePrompt(input: NurseTriageInput): string {
   return `
 You are a clinical AI assistant supporting a NURSE.
 
-STRICT RULES (MANDATORY):
+STRICT RULES:
 - You MUST NOT provide a diagnosis.
 - You MUST NOT use diagnostic language.
-- You MAY suggest possible considerations ONLY.
-- You MUST respect nurse authority at all times.
+- You MAY suggest considerations only.
 - You MUST highlight risk flags conservatively.
-- You MUST indicate missing information clearly.
 
 PATIENT SUMMARY:
 - Age: ${input.patient.age ?? "unknown"}
@@ -78,15 +77,7 @@ CONTEXT:
 - Location: ${input.context.location}
 - Doctor available: ${input.context.doctorAvailable}
 
-REQUIRED OUTPUT FORMAT (JSON ONLY):
-{
-  "observations": [string],
-  "considerations": [string],
-  "riskLevel": "low | medium | high",
-  "missingInformation": [string],
-  "suggestedNextSteps": [string],
-  "escalationRecommended": boolean
-}
+RETURN JSON ONLY.
 `;
 }
 
@@ -101,10 +92,9 @@ export async function runNurseTriagePipeline(
 ): Promise<NurseTriageResult> {
   const auditLogger = new ConsoleAuditLogger();
 
-  // 1️⃣ Build governed prompt
   const prompt = buildNurseTriagePrompt(input);
 
-  // 2️⃣ Audit: nurse initiated triage
+  // Audit input
   await auditLogger.log(
     createAuditEvent(
       input.consultationId,
@@ -115,25 +105,33 @@ export async function runNurseTriagePipeline(
     )
   );
 
-  // 3️⃣ Call orchestrator (governed AI entry)
+  // ✅ CORRECT GOVERNED ORCHESTRATOR CALL
   const aiResult = await orchestrateAI(
     {
       consultationId: input.consultationId,
       actor: "AI_TRIAGE",
+
+      mode: AIMode.TRIAGE,  // ← INSERTED HERE
+
+      intent: {
+        diagnosis: false,
+        comparison: false,
+        procedural: false
+      },
+
       prompt
     },
     auditLogger
   );
 
-  // 4️⃣ Parse and validate AI output
   let parsed: any;
+
   try {
     parsed = JSON.parse(aiResult.output);
   } catch {
-    throw new Error("AI output was not valid JSON (governance violation)");
+    throw new Error("AI output was not valid JSON");
   }
 
-  // 5️⃣ Enforce governance at pipeline level
   const result: NurseTriageResult = {
     observations: parsed.observations ?? [],
     considerations: parsed.considerations ?? [],
@@ -148,7 +146,6 @@ export async function runNurseTriagePipeline(
     }
   };
 
-  // 6️⃣ Audit: nurse-reviewed AI output
   await auditLogger.log(
     createAuditEvent(
       input.consultationId,
@@ -163,4 +160,4 @@ export async function runNurseTriagePipeline(
   );
 
   return result;
-}
+    }
