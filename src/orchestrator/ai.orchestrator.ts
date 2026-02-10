@@ -9,24 +9,13 @@ import { assertAIModeAllows } from "./ai.guards.js";
 
 /**
  * Orchestrator Input
- * Defines who is invoking AI, under what authority, and why
  */
 export interface OrchestratorInput {
   consultationId: string;
   actor: "AI_TRIAGE" | "NURSE" | "DOCTOR";
 
-  /**
-   * AI operational mode (HARD GOVERNANCE)
-   * - TRIAGE        → Phase 1
-   * - SAFETY_ASSIST → Phase 1.5
-   * - INVESTIGATIVE → Phase 2 (Doctor only)
-   */
   mode: AIMode;
 
-  /**
-   * Intent explicitly declares what the AI is being asked to do.
-   * Guards will BLOCK disallowed intents.
-   */
   intent?: {
     diagnosis?: boolean;
     comparison?: boolean;
@@ -47,13 +36,6 @@ export interface OrchestratorOutput {
 
 /**
  * Core AI Orchestrator
- *
- * Responsibilities:
- * - Enforce AI mode boundaries
- * - Route AI calls via adapters
- * - Emit full audit trail
- *
- * This file NEVER talks directly to cloud providers.
  */
 export async function orchestrateAI(
   input: OrchestratorInput,
@@ -67,30 +49,34 @@ export async function orchestrateAI(
     prompt
   } = input;
 
-  // 🔒 1️⃣ HARD GOVERNANCE CHECK (FAIL FAST)
+  // 🔒 1️⃣ HARD GOVERNANCE CHECK
   assertAIModeAllows(mode, intent);
 
-  // 🧾 2️⃣ Audit: AI invocation requested
+  // 🧾 2️⃣ Audit invocation
   await auditLogger.log(
     createAuditEvent(
       consultationId,
       actor,
       "INPUT_RECEIVED",
       `AI invoked in mode ${mode}`,
-      {
-        mode,
-        intent
-      }
+      { mode, intent }
     )
   );
 
-  // 🧠 3️⃣ Resolve AI adapter (Vertex / Mock / Future)
+  // 🧠 3️⃣ Resolve adapter
   const aiAdapter = createAIAdapter();
 
   // ⚙️ 4️⃣ Generate AI output
-  const result = await aiAdapter.generateCompletion({ prompt });
+  // IMPORTANT: pass as `text` for Vertex compatibility
+  const result = await aiAdapter.generateCompletion({
+    text: prompt
+  });
 
-  // 🧾 5️⃣ Audit: AI suggestion produced
+  if (!result?.text) {
+    throw new Error("AI adapter returned empty response");
+  }
+
+  // 🧾 5️⃣ Audit output preview
   await auditLogger.log(
     createAuditEvent(
       consultationId,
@@ -99,7 +85,7 @@ export async function orchestrateAI(
       "AI generated output",
       {
         mode,
-        outputPreview: result.text.slice(0, 300) // preview only, not full payload
+        outputPreview: result.text.slice(0, 300)
       }
     )
   );
