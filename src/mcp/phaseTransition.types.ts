@@ -1,5 +1,5 @@
-import { ClinicalPhase } from "./clinicalPhases";
-import { PhaseExitType } from "./phaseExits";
+import { ClinicalPhase } from "./clinicalPhases.js";
+import { PhaseExitType } from "./phaseExits.js";
 
 /**
  * Request to transition a patient between phases.
