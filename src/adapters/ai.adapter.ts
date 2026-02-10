@@ -6,7 +6,7 @@
  */
 
 export type AICompletionInput = {
-  prompt: string;
+  text: string;
 };
 
 export type AICompletionOutput = {
