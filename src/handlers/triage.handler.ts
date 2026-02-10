@@ -1,4 +1,4 @@
-import { runNurseTriagePipeline } from "../pipelines/triage.pipeline";
+import { runNurseTriagePipeline } from "../pipelines/triage.pipeline.js";
 
 /**
  * Nurse Triage HTTP Handler
