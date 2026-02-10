@@ -1,4 +1,4 @@
-import { AIAdapter, AICompletionInput, AICompletionOutput } from "./ai.adapter";
+import { AIAdapter, AICompletionInput, AICompletionOutput } from "./ai.adapter.js";
 
 /**
  * Mock AI Adapter
