@@ -10,90 +10,15 @@ import { getIdToken } from "../utils/googleAuth.js";
 
 /**
  * ============================
- * INPUT / OUTPUT CONTRACTS
- * ============================
- */
-
-export interface NurseTriageInput {
-  consultationId: string;
-
-  patient: {
-    age?: number;
-    sex?: "male" | "female" | "other";
-    symptoms: string[];
-    duration?: string;
-    severity?: number;
-  };
-
-  nurse: {
-    notes: string;
-    confidence: "low" | "medium" | "high";
-  };
-
-  context: {
-    location: "rural" | "urban";
-    doctorAvailable: boolean;
-  };
-}
-
-export interface NurseTriageResult {
-  observations: string[];
-  considerations: string[];
-  riskLevel: "low" | "medium" | "high";
-  missingInformation: string[];
-  suggestedNextSteps: string[];
-
-  governance: {
-    diagnosticAllowed: false;
-    humanInControl: "nurse";
-    escalationRecommended: boolean;
-  };
-}
-
-/**
- * ============================
- * PROMPT BUILDER
- * ============================
- */
-
-function buildNurseTriagePrompt(input: NurseTriageInput): string {
-  return `
-You are a clinical AI assistant supporting a NURSE.
-
-STRICT RULES:
-- You MUST NOT provide a diagnosis.
-- You MUST NOT use diagnostic language.
-- You MAY suggest considerations only.
-- You MUST highlight risk flags conservatively.
-
-PATIENT SUMMARY:
-- Age: ${input.patient.age ?? "unknown"}
-- Sex: ${input.patient.sex ?? "unknown"}
-- Symptoms: ${input.patient.symptoms.join(", ")}
-- Duration: ${input.patient.duration ?? "unknown"}
-- Severity (1–10): ${input.patient.severity ?? "unknown"}
-
-NURSE NOTES:
-${input.nurse.notes}
-
-CONTEXT:
-- Location: ${input.context.location}
-- Doctor available: ${input.context.doctorAvailable}
-
-RETURN JSON ONLY.
-`;
-}
-
-/**
- * ============================
- * MEDICINE DISTRIBUTION CALL
+ * MEDICINE BRIDGE
  * ============================
  */
 
 async function requestMedicineDistribution(
   consultationId: string,
-  riskLevel: "low" | "medium" | "high",
-  escalationRecommended: boolean
+  riskLevel: string,
+  escalationRecommended: boolean,
+  suggestedNextSteps: string[]
 ) {
   const gatewayUrl = process.env.API_GATEWAY_URL;
 
@@ -102,8 +27,19 @@ async function requestMedicineDistribution(
     return;
   }
 
+  // Governance-safe trigger logic
+  const needsMedicine =
+    riskLevel !== "low" ||
+    escalationRecommended ||
+    suggestedNextSteps.some(step =>
+      step.toLowerCase().includes("medication")
+    );
+
+  if (!needsMedicine) {
+    return;
+  }
+
   try {
-    // 🔐 Generate ID token for Cloud Run IAM
     const token = await getIdToken(gatewayUrl);
 
     await axios.post(
@@ -134,7 +70,7 @@ async function requestMedicineDistribution(
 
 /**
  * ============================
- * PIPELINE EXECUTION
+ * MAIN PIPELINE
  * ============================
  */
 
@@ -145,7 +81,6 @@ export async function runNurseTriagePipeline(
 
   const prompt = buildNurseTriagePrompt(input);
 
-  // Audit input
   await auditLogger.log(
     createAuditEvent(
       input.consultationId,
@@ -192,7 +127,6 @@ export async function runNurseTriagePipeline(
     }
   };
 
-  // Audit nurse review
   await auditLogger.log(
     createAuditEvent(
       input.consultationId,
@@ -206,19 +140,13 @@ export async function runNurseTriagePipeline(
     )
   );
 
-  /**
-   * 🔗 Trigger medicine distribution ONLY when necessary
-   */
-  if (
-    result.riskLevel === "high" ||
-    result.governance.escalationRecommended
-  ) {
-    await requestMedicineDistribution(
-      input.consultationId,
-      result.riskLevel,
-      result.governance.escalationRecommended
-    );
-  }
+  // 🔗 Medicine bridge
+  await requestMedicineDistribution(
+    input.consultationId,
+    result.riskLevel,
+    result.governance.escalationRecommended,
+    result.suggestedNextSteps
+  );
 
   return result;
 }
