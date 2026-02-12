@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getIdToken } from "../utils/googleAuth.js";
+import { getIdToken } from "../utils/googleAuth";
 
 /**
  * Prescription Handler
