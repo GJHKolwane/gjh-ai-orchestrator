@@ -4,6 +4,7 @@ import {
   ConsoleAuditLogger,
   createAuditEvent
 } from "../orchestrator/audit.logger.js";
+import axios from "axios";
 
 /**
  * ============================
@@ -86,6 +87,43 @@ RETURN JSON ONLY.
  * PIPELINE EXECUTION
  * ============================
  */
+async function requestMedicineDistribution(
+  consultationId: string,
+  riskLevel: string,
+  escalationRecommended: boolean
+) {
+  const gatewayUrl = process.env.API_GATEWAY_URL;
+
+  if (!gatewayUrl) {
+    console.warn("API_GATEWAY_URL not configured — skipping medicine request");
+    return;
+  }
+
+  try {
+    await axios.post(
+      `${gatewayUrl}/medicine`,
+      {
+        signalId: consultationId,
+        kpi: "PATIENT_MEDICATION_REQUEST",
+        severity:
+          riskLevel === "high"
+            ? "HIGH"
+            : riskLevel === "medium"
+            ? "MEDIUM"
+            : "LOW",
+        escalationRecommended
+      },
+      {
+        headers: {
+          "Content-Type": "application/json"
+        },
+        timeout: 5000
+      }
+    );
+  } catch (err: any) {
+    console.error("Medicine distribution call failed:", err.message);
+  }
+    }
 
 export async function runNurseTriagePipeline(
   input: NurseTriageInput
@@ -158,6 +196,14 @@ export async function runNurseTriagePipeline(
       }
     )
   );
+
+  // 🔗 Trigger medicine distribution layer
+await requestMedicineDistribution(
+  input.consultationId,
+  result.riskLevel,
+  result.governance.escalationRecommended
+);
+
 
   return result;
     }
