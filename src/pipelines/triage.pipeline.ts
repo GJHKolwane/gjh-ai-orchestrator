@@ -4,7 +4,9 @@ import {
   ConsoleAuditLogger,
   createAuditEvent
 } from "../orchestrator/audit.logger.js";
+
 import axios from "axios";
+import { getIdToken } from "../utils/googleAuth.js";
 
 /**
  * ============================
@@ -84,12 +86,13 @@ RETURN JSON ONLY.
 
 /**
  * ============================
- * PIPELINE EXECUTION
+ * MEDICINE DISTRIBUTION CALL
  * ============================
  */
+
 async function requestMedicineDistribution(
   consultationId: string,
-  riskLevel: string,
+  riskLevel: "low" | "medium" | "high",
   escalationRecommended: boolean
 ) {
   const gatewayUrl = process.env.API_GATEWAY_URL;
@@ -100,6 +103,9 @@ async function requestMedicineDistribution(
   }
 
   try {
+    // 🔐 Generate ID token for Cloud Run IAM
+    const token = await getIdToken(gatewayUrl);
+
     await axios.post(
       `${gatewayUrl}/medicine`,
       {
@@ -115,6 +121,7 @@ async function requestMedicineDistribution(
       },
       {
         headers: {
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
         timeout: 5000
@@ -123,7 +130,13 @@ async function requestMedicineDistribution(
   } catch (err: any) {
     console.error("Medicine distribution call failed:", err.message);
   }
-    }
+}
+
+/**
+ * ============================
+ * PIPELINE EXECUTION
+ * ============================
+ */
 
 export async function runNurseTriagePipeline(
   input: NurseTriageInput
@@ -143,20 +156,16 @@ export async function runNurseTriagePipeline(
     )
   );
 
-  // ✅ CORRECT GOVERNED ORCHESTRATOR CALL
   const aiResult = await orchestrateAI(
     {
       consultationId: input.consultationId,
       actor: "AI_TRIAGE",
-
-      mode: AIMode.TRIAGE,  // ← INSERTED HERE
-
+      mode: AIMode.TRIAGE,
       intent: {
         diagnosis: false,
         comparison: false,
         procedural: false
       },
-
       prompt
     },
     auditLogger
@@ -176,7 +185,6 @@ export async function runNurseTriagePipeline(
     riskLevel: parsed.riskLevel ?? "medium",
     missingInformation: parsed.missingInformation ?? [],
     suggestedNextSteps: parsed.suggestedNextSteps ?? [],
-
     governance: {
       diagnosticAllowed: false,
       humanInControl: "nurse",
@@ -184,6 +192,7 @@ export async function runNurseTriagePipeline(
     }
   };
 
+  // Audit nurse review
   await auditLogger.log(
     createAuditEvent(
       input.consultationId,
@@ -197,13 +206,19 @@ export async function runNurseTriagePipeline(
     )
   );
 
-  // 🔗 Trigger medicine distribution layer
-await requestMedicineDistribution(
-  input.consultationId,
-  result.riskLevel,
-  result.governance.escalationRecommended
-);
-
+  /**
+   * 🔗 Trigger medicine distribution ONLY when necessary
+   */
+  if (
+    result.riskLevel === "high" ||
+    result.governance.escalationRecommended
+  ) {
+    await requestMedicineDistribution(
+      input.consultationId,
+      result.riskLevel,
+      result.governance.escalationRecommended
+    );
+  }
 
   return result;
-    }
+}
