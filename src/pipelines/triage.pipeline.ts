@@ -5,67 +5,80 @@ import {
   createAuditEvent
 } from "../orchestrator/audit.logger.js";
 
-import axios from "axios";
-import { getIdToken } from "../utils/googleAuth.js";
-
 /**
  * ============================
- * MEDICINE BRIDGE
+ * INPUT / OUTPUT CONTRACTS
  * ============================
  */
 
-async function requestMedicineDistribution(
-  consultationId: string,
-  riskLevel: string,
-  escalationRecommended: boolean,
-  suggestedNextSteps: string[]
-) {
-  const gatewayUrl = process.env.API_GATEWAY_URL;
+export interface NurseTriageInput {
+  consultationId: string;
 
-  if (!gatewayUrl) {
-    console.warn("API_GATEWAY_URL not configured — skipping medicine request");
-    return;
-  }
+  patient: {
+    age?: number;
+    sex?: "male" | "female" | "other";
+    symptoms: string[];
+    duration?: string;
+    severity?: number;
+  };
 
-  // Governance-safe trigger logic
-  const needsMedicine =
-    riskLevel !== "low" ||
-    escalationRecommended ||
-    suggestedNextSteps.some(step =>
-      step.toLowerCase().includes("medication")
-    );
+  nurse: {
+    notes: string;
+    confidence: "low" | "medium" | "high";
+  };
 
-  if (!needsMedicine) {
-    return;
-  }
+  context: {
+    location: "rural" | "urban";
+    doctorAvailable: boolean;
+  };
+}
 
-  try {
-    const token = await getIdToken(gatewayUrl);
+export interface NurseTriageResult {
+  observations: string[];
+  considerations: string[];
+  riskLevel: "low" | "medium" | "high";
+  missingInformation: string[];
+  suggestedNextSteps: string[];
 
-    await axios.post(
-      `${gatewayUrl}/medicine`,
-      {
-        signalId: consultationId,
-        kpi: "PATIENT_MEDICATION_REQUEST",
-        severity:
-          riskLevel === "high"
-            ? "HIGH"
-            : riskLevel === "medium"
-            ? "MEDIUM"
-            : "LOW",
-        escalationRecommended
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 5000
-      }
-    );
-  } catch (err: any) {
-    console.error("Medicine distribution call failed:", err.message);
-  }
+  governance: {
+    diagnosticAllowed: false;
+    humanInControl: "nurse";
+    escalationRecommended: boolean;
+  };
+}
+
+/**
+ * ============================
+ * PROMPT BUILDER
+ * ============================
+ */
+
+function buildNurseTriagePrompt(input: NurseTriageInput): string {
+  return `
+You are a clinical AI assistant supporting a NURSE.
+
+STRICT RULES:
+- You MUST NOT provide a diagnosis.
+- You MUST NOT use diagnostic language.
+- You MAY suggest considerations only.
+- You MUST highlight risk flags conservatively.
+
+PATIENT SUMMARY:
+- Age: ${input.patient.age ?? "unknown"}
+- Sex: ${input.patient.sex ?? "unknown"}
+- Symptoms: ${input.patient.symptoms.join(", ")}
+- Duration: ${input.patient.duration ?? "unknown"}
+- Severity (1–10): ${input.patient.severity ?? "unknown"}
+
+NURSE NOTES:
+${input.nurse.notes}
+
+CONTEXT:
+- Location: ${input.context.location}
+- Doctor available: ${input.context.doctorAvailable}
+
+RETURN JSON ONLY.
+`;
 }
 
 /**
@@ -81,6 +94,7 @@ export async function runNurseTriagePipeline(
 
   const prompt = buildNurseTriagePrompt(input);
 
+  // Audit input
   await auditLogger.log(
     createAuditEvent(
       input.consultationId,
@@ -138,14 +152,6 @@ export async function runNurseTriagePipeline(
         riskLevel: result.riskLevel
       }
     )
-  );
-
-  // 🔗 Medicine bridge
-  await requestMedicineDistribution(
-    input.consultationId,
-    result.riskLevel,
-    result.governance.escalationRecommended,
-    result.suggestedNextSteps
   );
 
   return result;
