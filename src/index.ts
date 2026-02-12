@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import { nurseTriageHandler } from "./handlers/triage.handler.js";
+import { prescriptionHandler } from "./handlers/prescription.handler.js";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 8080;
@@ -23,6 +24,7 @@ app.post("/triage/nurse", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Unhandled server error" });
   }
 });
+app.post("/prescribe", prescriptionHandler);
 
 /**
  * Cloud Run requires:
