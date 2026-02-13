@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import { nurseTriageHandler } from "./handlers/triage.handler.js";
 import { prescriptionHandler } from "./handlers/prescription.handler.js";
+import { sendHeartbeat } from "./offline/heartbeatSender.js";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 8080;
@@ -34,3 +35,12 @@ app.post("/prescribe", prescriptionHandler);
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 GJHealth AI Orchestrator running on port ${PORT}`);
 });
+/**
+ * ======================================================
+ * AUTO HEARTBEAT LOOP
+ * ======================================================
+ */
+
+setInterval(() => {
+  sendHeartbeat();
+}, 30000); // every 30 seconds
