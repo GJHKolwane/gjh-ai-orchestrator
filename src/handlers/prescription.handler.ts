@@ -1,39 +1,47 @@
 import axios from "axios";
 import { getIdToken } from "../utils/googleAuth.js";
+import { evaluateOfflineStock } from "../offline/offlineStock.js";
 
 /**
  * Prescription Handler
  *
  * Responsibility:
  * - Accept clinician prescription
- * - Forward allocation request to API Gateway
- * - Return regional decision
+ * - Attempt regional allocation (ONLINE mode)
+ * - Fallback to offline evaluation if timeout/network failure
  */
 
 export async function prescriptionHandler(req: any, res: any) {
+  const {
+    consultationId,
+    facilityId,
+    medication,
+    quantity,
+    prescriberId
+  } = req.body;
+
+  // Basic validation
+  if (!consultationId || !facilityId || !medication || !quantity) {
+    return res.status(400).json({
+      error: "consultationId, facilityId, medication, and quantity are required"
+    });
+  }
+
+  const gatewayUrl = process.env.API_GATEWAY_URL;
+
+  if (!gatewayUrl) {
+    return res.status(500).json({
+      error: "API_GATEWAY_URL not configured"
+    });
+  }
+
   try {
-    const {
-      consultationId,
-      facilityId,
-      medication,
-      quantity,
-      prescriberId
-    } = req.body;
+    /**
+     * ==========================================
+     * 🌍 ONLINE MODE (Primary Path)
+     * ==========================================
+     */
 
-    // Basic validation
-    if (!consultationId || !facilityId || !medication || !quantity) {
-      return res.status(400).json({
-        error: "consultationId, facilityId, medication, and quantity are required"
-      });
-    }
-
-    const gatewayUrl = process.env.API_GATEWAY_URL;
-
-    if (!gatewayUrl) {
-      throw new Error("API_GATEWAY_URL not configured");
-    }
-
-    // 🔐 Generate IAM token for Cloud Run call
     const token = await getIdToken(gatewayUrl);
 
     const response = await axios.post(
@@ -52,20 +60,36 @@ export async function prescriptionHandler(req: any, res: any) {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        timeout: 10000
+        timeout: 2000 // ⏱ 2 second timeout for resilience
       }
     );
 
     return res.status(200).json({
+      mode: "ONLINE",
       status: "allocation_requested",
       regionalDecision: response.data
     });
 
   } catch (err: any) {
-    console.error("Prescription handler error:", err.message);
+    /**
+     * ==========================================
+     * 🏥 OFFLINE AUTONOMOUS MODE (Fallback)
+     * ==========================================
+     */
 
-    return res.status(500).json({
-      error: "Failed to process prescription"
+    console.warn("Regional unavailable — switching to OFFLINE mode");
+
+    const offlineDecision = evaluateOfflineStock(
+      medication,
+      facilityId,
+      quantity
+    );
+
+    return res.status(200).json({
+      mode: "OFFLINE_AUTONOMOUS",
+      status: "local_allocation_decision",
+      requiresRegionalSync: true,
+      offlineDecision
     });
   }
-      }
+}
