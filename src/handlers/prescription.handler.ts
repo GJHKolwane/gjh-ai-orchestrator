@@ -1,16 +1,16 @@
 import axios from "axios";
 import { getIdToken } from "../utils/googleAuth.js";
 import { evaluateOfflineStock } from "../offline/offlineStock.js";
-import { addOfflineTransaction } from "../offline/offlineQueue.js";
+import { isRegionalOnline } from "../offline/connectivityProbe.js";
 
 /**
  * Prescription Handler
  *
  * Responsibility:
  * - Accept clinician prescription
- * - Attempt regional allocation (ONLINE mode)
- * - Fallback to offline evaluation if timeout/network failure
- * - Queue offline transactions for reconciliation
+ * - Explicitly verify regional connectivity
+ * - Use ONLINE mode if reachable
+ * - Fallback to OFFLINE_AUTONOMOUS if not
  */
 
 export async function prescriptionHandler(req: any, res: any) {
@@ -22,7 +22,6 @@ export async function prescriptionHandler(req: any, res: any) {
     prescriberId
   } = req.body;
 
-  // Basic validation
   if (!consultationId || !facilityId || !medication || !quantity) {
     return res.status(400).json({
       error: "consultationId, facilityId, medication, and quantity are required"
@@ -37,13 +36,38 @@ export async function prescriptionHandler(req: any, res: any) {
     });
   }
 
-  try {
-    /**
-     * ==========================================
-     * 🌍 ONLINE MODE (Primary Path)
-     * ==========================================
-     */
+  /**
+   * ======================================================
+   * 🔎 EXPLICIT CONNECTIVITY CHECK (OPTION A)
+   * ======================================================
+   */
 
+  const regionalOnline = await isRegionalOnline(gatewayUrl);
+
+  if (!regionalOnline) {
+    console.warn("Regional unreachable — switching to OFFLINE mode");
+
+    const offlineDecision = evaluateOfflineStock(
+      medication,
+      facilityId,
+      quantity
+    );
+
+    return res.status(200).json({
+      mode: "OFFLINE_AUTONOMOUS",
+      status: "local_allocation_decision",
+      requiresRegionalSync: true,
+      offlineDecision
+    });
+  }
+
+  /**
+   * ======================================================
+   * 🌍 ONLINE MODE
+   * ======================================================
+   */
+
+  try {
     const token = await getIdToken(gatewayUrl);
 
     const response = await axios.post(
@@ -62,7 +86,7 @@ export async function prescriptionHandler(req: any, res: any) {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        timeout: 2000 // ⏱ 2 second timeout for resilience
+        timeout: 5000
       }
     );
 
@@ -73,29 +97,13 @@ export async function prescriptionHandler(req: any, res: any) {
     });
 
   } catch (err: any) {
-    /**
-     * ==========================================
-     * 🏥 OFFLINE AUTONOMOUS MODE (Fallback)
-     * ==========================================
-     */
-
-    console.warn("Regional unavailable — switching to OFFLINE mode");
+    console.warn("Regional call failed — fallback to OFFLINE mode");
 
     const offlineDecision = evaluateOfflineStock(
       medication,
       facilityId,
       quantity
     );
-
-    // 🔐 Only queue if stock was actually decremented
-    if (offlineDecision.decremented) {
-      addOfflineTransaction({
-        consultationId,
-        medication,
-        quantity,
-        timestamp: Date.now()
-      });
-    }
 
     return res.status(200).json({
       mode: "OFFLINE_AUTONOMOUS",
@@ -104,4 +112,4 @@ export async function prescriptionHandler(req: any, res: any) {
       offlineDecision
     });
   }
-  }
+        }
