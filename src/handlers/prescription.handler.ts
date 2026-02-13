@@ -1,6 +1,7 @@
 import axios from "axios";
 import { getIdToken } from "../utils/googleAuth.js";
 import { evaluateOfflineStock } from "../offline/offlineStock.js";
+import { addOfflineTransaction } from "../offline/offlineQueue.js";
 
 /**
  * Prescription Handler
@@ -9,6 +10,7 @@ import { evaluateOfflineStock } from "../offline/offlineStock.js";
  * - Accept clinician prescription
  * - Attempt regional allocation (ONLINE mode)
  * - Fallback to offline evaluation if timeout/network failure
+ * - Queue offline transactions for reconciliation
  */
 
 export async function prescriptionHandler(req: any, res: any) {
@@ -85,6 +87,16 @@ export async function prescriptionHandler(req: any, res: any) {
       quantity
     );
 
+    // 🔐 Only queue if stock was actually decremented
+    if (offlineDecision.decremented) {
+      addOfflineTransaction({
+        consultationId,
+        medication,
+        quantity,
+        timestamp: Date.now()
+      });
+    }
+
     return res.status(200).json({
       mode: "OFFLINE_AUTONOMOUS",
       status: "local_allocation_decision",
@@ -92,4 +104,4 @@ export async function prescriptionHandler(req: any, res: any) {
       offlineDecision
     });
   }
-}
+  }
