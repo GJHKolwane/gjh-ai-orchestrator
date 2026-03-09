@@ -4,7 +4,7 @@ import { prescriptionHandler } from "./handlers/prescription.handler.js";
 import { sendHeartbeat } from "./offline/heartbeatSender.js";
 
 const app = express();
-const PORT = Number(process.env.PORT) || 8080;
+const PORT = Number(process.env.PORT) || 8087;
 
 app.use(express.json());
 
