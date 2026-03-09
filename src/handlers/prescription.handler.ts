@@ -4,112 +4,119 @@ import { evaluateOfflineStock } from "../offline/offlineStock.js";
 import { isRegionalOnline } from "../offline/connectivityProbe.js";
 
 /**
- * Prescription Handler
- *
- * Responsibility:
- * - Accept clinician prescription
- * - Explicitly verify regional connectivity
- * - Use ONLINE mode if reachable
- * - Fallback to OFFLINE_AUTONOMOUS if not
- */
-
-export async function prescriptionHandler(req: any, res: any) {
-  const {
-    consultationId,
-    facilityId,
-    medication,
-    quantity,
-    prescriberId
-  } = req.body;
-
-  if (!consultationId || !facilityId || !medication || !quantity) {
-    return res.status(400).json({
-      error: "consultationId, facilityId, medication, and quantity are required"
-    });
-  }
-
-  const gatewayUrl = process.env.API_GATEWAY_URL;
-
-  if (!gatewayUrl) {
-    return res.status(500).json({
-      error: "API_GATEWAY_URL not configured"
-    });
-  }
-
-  /**
+ * ======================================================
+  * PRESCRIPTION HANDLER
    * ======================================================
-   * 🔎 EXPLICIT CONNECTIVITY CHECK (OPTION A)
-   * ======================================================
-   */
+    * Responsibility:
+     * - Accept clinician prescription
+      * - Check regional connectivity
+       * - Use ONLINE mode if reachable
+        * - Fallback to OFFLINE_AUTONOMOUS if not
+         */
 
-  const regionalOnline = await isRegionalOnline(gatewayUrl);
+         export async function prescriptionHandler(req: any, res: any) {
 
-  if (!regionalOnline) {
-    console.warn("Regional unreachable — switching to OFFLINE mode");
+           const {
+               consultationId,
+                   facilityId,
+                       medication,
+                           quantity,
+                               prescriberId
+                                 } = req.body;
 
-    const offlineDecision = evaluateOfflineStock(
-      medication,
-      facilityId,
-      quantity
-    );
+                                   if (!consultationId || !facilityId || !medication || !quantity) {
+                                       return res.status(400).json({
+                                             error: "consultationId, facilityId, medication, and quantity are required"
+                                                 });
+                                                   }
 
-    return res.status(200).json({
-      mode: "OFFLINE_AUTONOMOUS",
-      status: "local_allocation_decision",
-      requiresRegionalSync: true,
-      offlineDecision
-    });
-  }
+                                                     const gatewayUrl = process.env.API_GATEWAY_URL;
 
-  /**
-   * ======================================================
-   * 🌍 ONLINE MODE
-   * ======================================================
-   */
+                                                       if (!gatewayUrl) {
+                                                           return res.status(500).json({
+                                                                 error: "API_GATEWAY_URL not configured"
+                                                                     });
+                                                                       }
 
-  try {
-    const token = await getIdToken(gatewayUrl);
+                                                                         /*
+                                                                           =====================================================
+                                                                             CHECK REGIONAL CONNECTIVITY
+                                                                               =====================================================
+                                                                                 */
 
-    const response = await axios.post(
-      `${gatewayUrl}/medicine`,
-      {
-        signalId: consultationId,
-        facilityId,
-        medication,
-        quantity,
-        prescriberId,
-        kpi: "PATIENT_MEDICATION_REQUEST",
-        severity: "MEDIUM"
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 5000
-      }
-    );
+                                                                                   const regionalOnline = await isRegionalOnline(gatewayUrl);
 
-    return res.status(200).json({
-      mode: "ONLINE",
-      status: "allocation_requested",
-      regionalDecision: response.data
-    });
+                                                                                     if (!regionalOnline) {
 
-  } catch (err: any) {
-    console.warn("Regional call failed — fallback to OFFLINE mode");
+                                                                                         console.warn("Regional unreachable — switching to OFFLINE mode");
 
-    const offlineDecision = evaluateOfflineStock(
-      medication,
-      facilityId,
-      quantity
-    );
+                                                                                             const offlineDecision = evaluateOfflineStock(
+                                                                                                   medication,
+                                                                                                         facilityId,
+                                                                                                               quantity
+                                                                                                                   );
 
-    return res.status(200).json({
-      mode: "OFFLINE_AUTONOMOUS",
-      status: "local_allocation_decision",
-      requiresRegionalSync: true,
-      offlineDecision
-    });
-  }
-        }
+                                                                                                                       return res.status(200).json({
+                                                                                                                             mode: "OFFLINE_AUTONOMOUS",
+                                                                                                                                   status: "local_allocation_decision",
+                                                                                                                                         requiresRegionalSync: true,
+                                                                                                                                               offlineDecision
+                                                                                                                                                   });
+                                                                                                                                                     }
+
+                                                                                                                                                       /*
+                                                                                                                                                         =====================================================
+                                                                                                                                                           ONLINE MODE
+                                                                                                                                                             =====================================================
+                                                                                                                                                               */
+
+                                                                                                                                                                 try {
+
+                                                                                                                                                                     const token = await getIdToken(gatewayUrl);
+
+                                                                                                                                                                         const response = await axios.post(
+                                                                                                                                                                               `${gatewayUrl}/medicine`,
+                                                                                                                                                                                     {
+                                                                                                                                                                                             signalId: consultationId,
+                                                                                                                                                                                                     facilityId,
+                                                                                                                                                                                                             medication,
+                                                                                                                                                                                                                     quantity,
+                                                                                                                                                                                                                             prescriberId,
+                                                                                                                                                                                                                                     kpi: "PATIENT_MEDICATION_REQUEST",
+                                                                                                                                                                                                                                             severity: "MEDIUM"
+                                                                                                                                                                                                                                                   },
+                                                                                                                                                                                                                                                         {
+                                                                                                                                                                                                                                                                 headers: {
+                                                                                                                                                                                                                                                                           Authorization: `Bearer ${token}`,
+                                                                                                                                                                                                                                                                                     "Content-Type": "application/json"
+                                                                                                                                                                                                                                                                                             },
+                                                                                                                                                                                                                                                                                                     timeout: 5000
+                                                                                                                                                                                                                                                                                                           }
+                                                                                                                                                                                                                                                                                                               );
+
+                                                                                                                                                                                                                                                                                                                   return res.status(200).json({
+                                                                                                                                                                                                                                                                                                                         mode: "ONLINE",
+                                                                                                                                                                                                                                                                                                                               status: "allocation_requested",
+                                                                                                                                                                                                                                                                                                                                     regionalDecision: response.data
+                                                                                                                                                                                                                                                                                                                                         });
+
+                                                                                                                                                                                                                                                                                                                                           } catch (err) {
+
+                                                                                                                                                                                                                                                                                                                                               console.warn("Regional call failed — fallback to OFFLINE mode");
+
+                                                                                                                                                                                                                                                                                                                                                   const offlineDecision = evaluateOfflineStock(
+                                                                                                                                                                                                                                                                                                                                                         medication,
+                                                                                                                                                                                                                                                                                                                                                               facilityId,
+                                                                                                                                                                                                                                                                                                                                                                     quantity
+                                                                                                                                                                                                                                                                                                                                                                         );
+
+                                                                                                                                                                                                                                                                                                                                                                             return res.status(200).json({
+                                                                                                                                                                                                                                                                                                                                                                                   mode: "OFFLINE_AUTONOMOUS",
+                                                                                                                                                                                                                                                                                                                                                                                         status: "local_allocation_decision",
+                                                                                                                                                                                                                                                                                                                                                                                               requiresRegionalSync: true,
+                                                                                                                                                                                                                                                                                                                                                                                                     offlineDecision
+                                                                                                                                                                                                                                                                                                                                                                                                         });
+
+                                                                                                                                                                                                                                                                                                                                                                                                           }
+
+                                                                                                                                                                                                                                                                                                                                                                                                           }
