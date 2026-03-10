@@ -1,63 +1,117 @@
-import { runNurseTriagePipeline } from "../pipelines/triage.pipeline.js";
+import { Request, Response } from "express";
 
-/**
- * Nurse Triage HTTP Handler
- *
- * Responsibilities:
- * - Validate incoming request
- * - Call nurse triage pipeline
- * - Return structured governed response
- *
- * IMPORTANT:
- * - No AI logic here
- * - No governance logic here
- * - No provider logic here
- */
+import { orchestrateAI } from "../orchestration/ai.orchestrator.js";
+import { AIMode } from "../orchestration/ai.modes.js";
 
-export async function nurseTriageHandler(req: any, res: any) {
+import {
+  getEncounterTimeline,
+  storeAITriage
+} from "../adapters/caseService.adapter.js";
+
+/*
+================================================
+AI TRIAGE HANDLER
+================================================
+*/
+
+export async function nurseTriageHandler(req: Request, res: Response) {
+
   try {
-    const body = req.body;
 
-    if (!body) {
+    const { encounterId } = req.body;
+
+    if (!encounterId) {
       return res.status(400).json({
-        error: "Missing request body",
+        error: "encounterId required"
       });
     }
 
-    const {
-      consultationId,
-      patient,
-      nurse,
-      context,
-    } = body;
+    /*
+    ==========================================
+    LOAD FULL CLINICAL CONTEXT
+    ==========================================
+    */
 
-    // 🔒 Minimal input validation (pipeline enforces deeper governance)
-    if (!consultationId || !patient || !nurse || !context) {
-      return res.status(400).json({
-        error:
-          "consultationId, patient, nurse, and context are required",
-      });
-    }
+    const timeline = await getEncounterTimeline(encounterId);
 
-    // 🧠 Execute governed nurse triage pipeline
-    const result = await runNurseTriagePipeline({
-      consultationId,
-      patient,
-      nurse,
-      context,
+    const { patient, timeline: events } = timeline;
+
+    const latestVitals = events.vitals?.slice(-1)[0];
+    const symptoms = events.symptoms || [];
+    const notes = events.notes || [];
+
+    /*
+    ==========================================
+    BUILD AI PROMPT
+    ==========================================
+    */
+
+    const prompt = `
+You are a clinical triage assistant.
+
+Patient:
+Name: ${patient?.name || "unknown"}
+Gender: ${patient?.gender || "unknown"}
+
+Vitals:
+${JSON.stringify(latestVitals, null, 2)}
+
+Symptoms:
+${JSON.stringify(symptoms, null, 2)}
+
+Nurse Notes:
+${JSON.stringify(notes, null, 2)}
+
+Task:
+Provide a triage recommendation.
+Classify risk level: LOW, MEDIUM, HIGH.
+Explain reasoning.
+`;
+
+    /*
+    ==========================================
+    RUN AI
+    ==========================================
+    */
+
+    const aiResult = await orchestrateAI({
+      consultationId: encounterId,
+      actor: "AI_TRIAGE",
+      mode: AIMode.CLINICAL,
+      prompt
     });
 
-    // ✅ Success response
-    return res.status(200).json({
-      consultationId,
-      triage: result,
-    });
-  } catch (err: any) {
-    console.error("Nurse triage handler error:", err);
+    /*
+    ==========================================
+    STORE TRIAGE EVENT
+    ==========================================
+    */
 
-    return res.status(500).json({
-      error: "Failed to execute nurse triage",
-      message: err.message,
+    await storeAITriage(encounterId, {
+      model: aiResult.source,
+      recommendation: aiResult.output,
+      createdAt: new Date().toISOString()
     });
+
+    /*
+    ==========================================
+    RESPONSE
+    ==========================================
+    */
+
+    res.json({
+      encounterId,
+      triage: aiResult.output
+    });
+
+  } catch (err) {
+
+    console.error("Triage error:", err);
+
+    res.status(500).json({
+      error: "Triage failed"
+    });
+
   }
-}
+
+      }
