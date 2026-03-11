@@ -8,6 +8,8 @@ import {
   storeAITriage
 } from "../adapters/caseService.adapter.js";
 
+import { buildClinicalTriagePrompt } from "../clinical/promptBuilder.js";
+
 /*
 ================================================
 AI TRIAGE HANDLER
@@ -36,7 +38,7 @@ export async function nurseTriageHandler(req: Request, res: Response) {
 
     const { patient, timeline: events } = timeline;
 
-    const latestVitals = events.vitals?.slice(-1)[0];
+    const latestVitals = events.vitals?.slice(-1)[0] || null;
     const symptoms = events.symptoms || [];
     const notes = events.notes || [];
 
@@ -46,31 +48,16 @@ export async function nurseTriageHandler(req: Request, res: Response) {
     ==========================================
     */
 
-    const prompt = `
-You are a clinical triage assistant.
-
-Patient:
-Name: ${patient?.name || "unknown"}
-Gender: ${patient?.gender || "unknown"}
-
-Vitals:
-${JSON.stringify(latestVitals, null, 2)}
-
-Symptoms:
-${JSON.stringify(symptoms, null, 2)}
-
-Nurse Notes:
-${JSON.stringify(notes, null, 2)}
-
-Task:
-Provide a triage recommendation.
-Classify risk level: LOW, MEDIUM, HIGH.
-Explain reasoning.
-`;
+    const prompt = buildClinicalTriagePrompt(
+      patient,
+      latestVitals,
+      symptoms,
+      notes
+    );
 
     /*
     ==========================================
-    RUN AI
+    RUN AI TRIAGE
     ==========================================
     */
 
@@ -83,7 +70,7 @@ Explain reasoning.
 
     /*
     ==========================================
-    STORE TRIAGE EVENT
+    STORE TRIAGE EVENT IN CASE SERVICE
     ==========================================
     */
 
@@ -95,7 +82,7 @@ Explain reasoning.
 
     /*
     ==========================================
-    RESPONSE
+    RETURN RESULT TO DASHBOARD
     ==========================================
     */
 
@@ -114,4 +101,4 @@ Explain reasoning.
 
   }
 
-      }
+}
