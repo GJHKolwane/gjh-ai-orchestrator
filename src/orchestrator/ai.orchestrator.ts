@@ -7,6 +7,8 @@ import {
 import { AIMode } from "./ai.modes.js";
 import { assertAIModeAllows } from "./ai.guards.js";
 
+import { enforceHumanGate } from "../governance/humanGate.guard.js";
+
 /**
  * Orchestrator Input
  */
@@ -41,6 +43,7 @@ export async function orchestrateAI(
   input: OrchestratorInput,
   auditLogger: AuditLogger = new ConsoleAuditLogger()
 ): Promise<OrchestratorOutput> {
+
   const {
     consultationId,
     actor,
@@ -49,10 +52,20 @@ export async function orchestrateAI(
     prompt
   } = input;
 
-  // 🔒 1️⃣ HARD GOVERNANCE CHECK
+  /*
+  ======================================================
+  1️⃣ HARD GOVERNANCE CHECK
+  ======================================================
+  */
+
   assertAIModeAllows(mode, intent);
 
-  // 🧾 2️⃣ Audit invocation
+  /*
+  ======================================================
+  2️⃣ AUDIT INPUT
+  ======================================================
+  */
+
   await auditLogger.log(
     createAuditEvent(
       consultationId,
@@ -63,11 +76,20 @@ export async function orchestrateAI(
     )
   );
 
-  // 🧠 3️⃣ Resolve adapter
+  /*
+  ======================================================
+  3️⃣ RESOLVE AI ADAPTER
+  ======================================================
+  */
+
   const aiAdapter = createAIAdapter();
 
-  // ⚙️ 4️⃣ Generate AI output
-  // IMPORTANT: pass as `text` for Vertex compatibility
+  /*
+  ======================================================
+  4️⃣ GENERATE AI OUTPUT
+  ======================================================
+  */
+
   const result = await aiAdapter.generateCompletion({
     text: prompt
   });
@@ -76,7 +98,21 @@ export async function orchestrateAI(
     throw new Error("AI adapter returned empty response");
   }
 
-  // 🧾 5️⃣ Audit output preview
+  /*
+  ======================================================
+  5️⃣ HUMAN-IN-THE-LOOP SAFETY GUARD
+  Prevent AI from outputting treatment instructions
+  ======================================================
+  */
+
+  const safeOutput = enforceHumanGate(result.text);
+
+  /*
+  ======================================================
+  6️⃣ AUDIT OUTPUT
+  ======================================================
+  */
+
   await auditLogger.log(
     createAuditEvent(
       consultationId,
@@ -85,15 +121,21 @@ export async function orchestrateAI(
       "AI generated output",
       {
         mode,
-        outputPreview: result.text.slice(0, 300)
+        outputPreview: safeOutput.slice(0, 300)
       }
     )
   );
 
-  // ✅ 6️⃣ Return governed output
+  /*
+  ======================================================
+  7️⃣ RETURN GOVERNED OUTPUT
+  ======================================================
+  */
+
   return {
     source: process.env.AI_PROVIDER || "mock",
     timestamp: new Date().toISOString(),
-    output: result.text
+    output: safeOutput
   };
-}
+
+    }
