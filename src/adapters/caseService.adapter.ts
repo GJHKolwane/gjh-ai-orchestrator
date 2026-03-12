@@ -9,152 +9,148 @@ CREATE PATIENT
 export async function createPatient(data: any) {
 
   const res = await fetch(`${CASE_API}/patients`, {
-      method: "POST",
-          headers: {
-                "Content-Type": "application/json"
-                    },
-                        body: JSON.stringify(data)
-                          });
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(data)
+  });
 
-                            if (!res.ok) {
-                                throw new Error("Failed to create patient");
-                                  }
+  if (!res.ok) {
+    throw new Error("Failed to create patient");
+  }
 
-                                    return res.json();
-                                    }
+  return res.json();
+}
 
-                                    /*
-                                    ================================================
-                                    CREATE ENCOUNTER
-                                    ================================================
-                                    */
+/*
+================================================
+CREATE ENCOUNTER
+================================================
+*/
 
-                                    export async function createEncounter(patientId: string) {
+export async function createEncounter(patientId: string) {
 
-                                      const res = await fetch(`${CASE_API}/encounters`, {
-                                          method: "POST",
-                                              headers: {
-                                                    "Content-Type": "application/json"
-                                                        },
-                                                            body: JSON.stringify({
-                                                                  patientId
-                                                                      })
-                                                                        });
+  const res = await fetch(`${CASE_API}/encounters`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ patientId })
+  });
 
-                                                                          if (!res.ok) {
-                                                                              throw new Error("Failed to create encounter");
-                                                                                }
+  if (!res.ok) {
+    throw new Error("Failed to create encounter");
+  }
 
-                                                                                  return res.json();
-                                                                                  }
+  return res.json();
+}
 
-                                                                                  /*
-                                                                                  ================================================
-                                                                                  STORE VITALS
-                                                                                  ================================================
-                                                                                  */
+/*
+================================================
+STORE VITALS
+================================================
+*/
 
-                                                                                  export async function storeVitals(encounterId: string, vitals: any) {
+export async function storeVitals(encounterId: string, vitals: any) {
 
-                                                                                    const res = await fetch(`${CASE_API}/encounters/${encounterId}/vitals`, {
-                                                                                        method: "POST",
-                                                                                            headers: {
-                                                                                                  "Content-Type": "application/json"
-                                                                                                      },
-                                                                                                          body: JSON.stringify(vitals)
-                                                                                                            });
+  const res = await fetch(`${CASE_API}/encounters/${encounterId}/vitals`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(vitals)
+  });
 
-                                                                                                              if (!res.ok) {
-                                                                                                                  throw new Error("Failed to store vitals");
-                                                                                                                    }
+  if (!res.ok) {
+    throw new Error("Failed to store vitals");
+  }
 
-                                                                                                                      return res.json();
-                                                                                                                      }
+  return res.json();
+}
 
-                                                                                                                      /*
-                                                                                                                      ================================================
-                                                                                                                      STORE SYMPTOMS
-                                                                                                                      ================================================
-                                                                                                                      */
+/*
+================================================
+STORE SYMPTOMS
+================================================
+*/
 
-                                                                                                                      export async function storeSymptoms(encounterId: string, symptoms: any) {
+export async function storeSymptoms(encounterId: string, symptoms: any) {
 
-                                                                                                                        const res = await fetch(`${CASE_API}/encounters/${encounterId}/symptoms`, {
-                                                                                                                            method: "POST",
-                                                                                                                                headers: {
-                                                                                                                                      "Content-Type": "application/json"
-                                                                                                                                          },
-                                                                                                                                              body: JSON.stringify(symptoms)
-                                                                                                                                                });
+  const res = await fetch(`${CASE_API}/encounters/${encounterId}/symptoms`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(symptoms)
+  });
 
-                                                                                                                                                  if (!res.ok) {
-                                                                                                                                                      throw new Error("Failed to store symptoms");
-                                                                                                                                                        }
+  if (!res.ok) {
+    throw new Error("Failed to store symptoms");
+  }
 
-                                                                                                                                                          return res.json();
-                                                                                                                                                          }
+  return res.json();
+}
 
-                                                                                                                                                          /*
-                                                                                                                                                          ================================================
-                                                                                                                                                          STORE NOTES
-                                                                                                                                                          ================================================
-                                                                                                                                                          */
+/*
+================================================
+STORE NURSE NOTES
+================================================
+*/
 
-                                                                                                                                                          export async function storeNotes(encounterId: string, notes: any) {
+export async function storeNotes(encounterId: string, notes: any) {
 
-                                                                                                                                                            const res = await fetch(`${CASE_API}/encounters/${encounterId}/notes`, {
-                                                                                                                                                                method: "POST",
-                                                                                                                                                                    headers: {
-                                                                                                                                                                          "Content-Type": "application/json"
-                                                                                                                                                                              },
-                                                                                                                                                                                  body: JSON.stringify({
-                                                                                                                                                                                        notes
-                                                                                                                                                                                            })
-                                                                                                                                                                                              });
+  const res = await fetch(`${CASE_API}/encounters/${encounterId}/notes`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ notes })
+  });
 
-                                                                                                                                                                                                if (!res.ok) {
-                                                                                                                                                                                                    throw new Error("Failed to store notes");
-                                                                                                                                                                                                      }
+  if (!res.ok) {
+    throw new Error("Failed to store notes");
+  }
 
-                                                                                                                                                                                                        return res.json();
-                                                                                                                                                                                                        }
+  return res.json();
+}
 
-                                                                                                                                                                                                        /*
-                                                                                                                                                                                                        ================================================
-                                                                                                                                                                                                        FETCH ENCOUNTER TIMELINE
-                                                                                                                                                                                                        ================================================
-                                                                                                                                                                                                        */
+/*
+================================================
+STORE DOCTOR NOTES
+================================================
+*/
 
-                                                                                                                                                                                                        export async function getEncounterTimeline(encounterId: string) {
+export async function storeDoctorNotes(encounterId: string, notes: any) {
 
-                                                                                                                                                                                                          const res = await fetch(`${CASE_API}/encounters/${encounterId}/timeline`);
+  const res = await fetch(`${CASE_API}/encounters/${encounterId}/doctor-notes`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(notes)
+  });
 
-                                                                                                                                                                                                            if (!res.ok) {
-                                                                                                                                                                                                                throw new Error("Failed to load encounter timeline");
-                                                                                                                                                                                                                  }
+  if (!res.ok) {
+    throw new Error("Failed to store doctor notes");
+  }
 
-                                                                                                                                                                                                                    return res.json();
-                                                                                                                                                                                                                    }
+  return res.json();
+}
 
-                                                                                                                                                                                                                    /*
-                                                                                                                                                                                                                    ================================================
-                                                                                                                                                                                                                    STORE AI TRIAGE
-                                                                                                                                                                                                                    ================================================
-                                                                                                                                                                                                                    */
+/*
+================================================
+FETCH TIMELINE
+================================================
+*/
 
-                                                                                                                                                                                                                    export async function storeAITriage(encounterId: string, triage: any) {
+export async function getEncounterTimeline(encounterId: string) {
 
-                                                                                                                                                                                                                      const res = await fetch(`${CASE_API}/encounters/${encounterId}/triage`, {
-                                                                                                                                                                                                                          method: "POST",
-                                                                                                                                                                                                                              headers: {
-                                                                                                                                                                                                                                    "Content-Type": "application/json"
-                                                                                                                                                                                                                                        },
-                                                                                                                                                                                                                                            body: JSON.stringify(triage)
-                                                                                                                                                                                                                                              });
+  const res = await fetch(`${CASE_API}/encounters/${encounterId}/timeline`);
 
-                                                                                                                                                                                                                                                if (!res.ok) {
-                                                                                                                                                                                                                                                    throw new Error("Failed to store AI triage");
-                                                                                                                                                                                                                                                      }
+  if (!res.ok) {
+    throw new Error("Failed to load encounter timeline");
+  }
 
-                                                                                                                                                                                                                                                        return res.json();
-                                                                                                                                                                                                                                                        }
+  return res.json();
+}
