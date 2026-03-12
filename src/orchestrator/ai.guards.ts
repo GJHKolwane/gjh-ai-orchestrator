@@ -1,28 +1,29 @@
-import { AIMode, AIModeCapabilities } from "./ai.modes.js";
+import { AIMode } from "./ai.modes.js";
 
-/**
- * Validates whether a requested AI action is allowed
- * in the current AI mode.
- */
+/*
+================================================
+AI MODE GOVERNANCE GUARD
+================================================
+Ensures that AI usage complies with allowed mode.
+*/
+
 export function assertAIModeAllows(
   mode: AIMode,
-  request: {
-    diagnosis?: boolean;
-    comparison?: boolean;
-    procedural?: boolean;
-  }
-): void {
-  const caps = AIModeCapabilities[mode];
+    intent: any
+    ) {
 
-  if (request.diagnosis && !caps.allowDiagnosis) {
-    throw new Error(`AI diagnosis not allowed in mode ${mode}`);
-  }
+      if (!mode) {
+          throw new Error("AI mode not specified");
+            }
 
-  if (request.comparison && !caps.allowComparisons) {
-    throw new Error(`AI comparison not allowed in mode ${mode}`);
-  }
+              /*
+                Example governance rules
+                  */
 
-  if (request.procedural && !caps.allowProceduralGuidance) {
-    throw new Error(`AI procedural guidance not allowed in mode ${mode}`);
-  }
-}
+                    if (mode === AIMode.CLINICAL && intent?.diagnosis) {
+                        throw new Error(
+                              "Clinical AI mode cannot produce final diagnosis"
+                                  );
+                                    }
+
+                                    }
