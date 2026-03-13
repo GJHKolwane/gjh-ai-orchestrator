@@ -58,6 +58,30 @@ export async function createEncounter(patientId: string) {
 
 /*
 ================================================
+SET ENCOUNTER STAGE (NEW FIX)
+================================================
+*/
+
+export async function setEncounterStage(encounterId: string, stage: string) {
+
+  const res = await fetch(`${CASE_API}/encounters/${encounterId}/stage`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ stage })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to set encounter stage: ${text}`);
+  }
+
+  return res.json();
+}
+
+/*
+================================================
 STORE VITALS
 ================================================
 */
@@ -219,4 +243,4 @@ export async function storeTreatmentDecision(
   }
 
   return res.json();
-    }
+}
