@@ -1,269 +1,94 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
-
-import { nurseTriageHandler } from "./handlers/triage.handler.js";
-import { prescriptionHandler } from "./handlers/prescription.handler.js";
-
-import {
-  createPatient,
-  createEncounter,
-  storeVitals,
-  storeSymptoms,
-  storeNotes,
-  storeTreatmentDecision
-} from "./adapters/caseService.adapter.js";
-
-import { sendHeartbeat } from "./offline/heartbeatSender.js";
+import axios from "axios";
 
 const app = express();
-const PORT = Number(process.env.PORT) || 8087;
-
-/*
-================================================
-MIDDLEWARE
-================================================
-*/
 
 app.use(cors());
 app.use(express.json());
 
-/*
-================================================
-HEALTH CHECK
-================================================
-*/
+const CASE_MCP_URL = "http://localhost:5050";
 
-app.get("/health", (_req: Request, res: Response) => {
-
-  res.status(200).json({
-    status: "ok",
-    service: "gjh-ai-orchestrator",
-    region: process.env.GCP_REGION || "europe-west1",
-    timestamp: new Date().toISOString()
-  });
-
-});
-
-/*
-================================================
-CLINICAL INTAKE
-================================================
-*/
-
+/**
+ * TEST DEBUG VERSION
+ * Patient Intake Endpoint
+ */
 app.post("/clinical/intake", async (req: Request, res: Response) => {
-
   try {
+
+    console.log("---- INTAKE REQUEST RECEIVED ----");
+    console.log("Request Body:", req.body);
 
     const { omang } = req.body;
 
     if (!omang) {
-      return res.status(400).json({ error: "omang required" });
-    }
-
-    const patient = await createPatient({
-      name: omang,
-      identifier: omang
-    });
-
-    const encounter = await createEncounter(patient.id);
-
-    res.json({
-      patientId: patient.id,
-      encounterId: encounter.id
-    });
-
-  } catch (err) {
-
-    console.error("Intake error:", err);
-
-    res.status(500).json({
-      error: "Clinical intake failed"
-    });
-
-  }
-
-});
-
-/*
-================================================
-STORE VITALS
-================================================
-*/
-
-app.post("/clinical/vitals", async (req: Request, res: Response) => {
-
-  try {
-
-    const { encounterId, vitals } = req.body;
-
-    if (!encounterId) {
-      return res.status(400).json({ error: "encounterId required" });
-    }
-
-    const result = await storeVitals(encounterId, vitals);
-
-    res.json(result);
-
-  } catch (err) {
-
-    console.error("Vitals error:", err);
-
-    res.status(500).json({
-      error: "Failed to store vitals"
-    });
-
-  }
-
-});
-
-/*
-================================================
-STORE SYMPTOMS
-================================================
-*/
-
-app.post("/clinical/symptoms", async (req: Request, res: Response) => {
-
-  try {
-
-    const { encounterId, symptoms } = req.body;
-
-    if (!encounterId) {
-      return res.status(400).json({ error: "encounterId required" });
-    }
-
-    const result = await storeSymptoms(encounterId, symptoms);
-
-    res.json(result);
-
-  } catch (err) {
-
-    console.error("Symptoms error:", err);
-
-    res.status(500).json({
-      error: "Failed to store symptoms"
-    });
-
-  }
-
-});
-
-/*
-================================================
-STORE NURSE NOTES
-================================================
-*/
-
-app.post("/clinical/notes", async (req: Request, res: Response) => {
-
-  try {
-
-    const { encounterId, notes } = req.body;
-
-    if (!encounterId) {
-      return res.status(400).json({ error: "encounterId required" });
-    }
-
-    const result = await storeNotes(encounterId, notes);
-
-    res.json(result);
-
-  } catch (err) {
-
-    console.error("Notes error:", err);
-
-    res.status(500).json({
-      error: "Failed to store notes"
-    });
-
-  }
-
-});
-
-/*
-================================================
-AI TRIAGE
-================================================
-*/
-
-app.post("/triage/nurse", async (req: Request, res: Response) => {
-
-  try {
-
-    await nurseTriageHandler(req, res);
-
-  } catch (err) {
-
-    console.error("Unhandled handler error:", err);
-
-    res.status(500).json({
-      error: "Unhandled server error"
-    });
-
-  }
-
-});
-
-/*
-================================================
-TREATMENT DECISION
-================================================
-*/
-
-app.post("/clinical/treatment-decision", async (req: Request, res: Response) => {
-
-  try {
-
-    const { encounterId, decision } = req.body;
-
-    if (!encounterId) {
+      console.error("OMANG missing from request");
       return res.status(400).json({
-        error: "encounterId required"
+        error: "OMANG required"
       });
     }
 
-    const result = await storeTreatmentDecision(encounterId, decision);
+    console.log("OMANG validated:", omang);
 
-    res.json(result);
+    /**
+     * STEP 1
+     * Create patient in Case MCP
+     */
+    console.log("Calling Case MCP → createPatient");
 
-  } catch (err) {
+    const patientResponse = await axios.post(
+      `${CASE_MCP_URL}/patients`,
+      { omang }
+    );
 
-    console.error("Treatment decision error:", err);
+    console.log("Patient creation result:", patientResponse.data);
 
-    res.status(500).json({
-      error: "Failed to store treatment decision"
+    const patientId = patientResponse.data.patientId;
+
+    if (!patientId) {
+      console.error("Patient ID missing from MCP response");
+      throw new Error("Patient creation failed");
+    }
+
+    /**
+     * STEP 2
+     * Create encounter
+     */
+    console.log("Calling Case MCP → createEncounter");
+
+    const encounterResponse = await axios.post(
+      `${CASE_MCP_URL}/encounters`,
+      { patientId }
+    );
+
+    console.log("Encounter creation result:", encounterResponse.data);
+
+    const encounterId = encounterResponse.data.encounterId;
+
+    if (!encounterId) {
+      console.error("Encounter ID missing");
+      throw new Error("Encounter creation failed");
+    }
+
+    console.log("---- INTAKE SUCCESS ----");
+
+    return res.json({
+      patientId,
+      encounterId
+    });
+
+  } catch (error: any) {
+
+    console.error("INTAKE ERROR");
+    console.error(error?.response?.data || error.message);
+
+    return res.status(500).json({
+      error: "Patient intake failed"
     });
 
   }
-
 });
 
-/*
-================================================
-PRESCRIPTION
-================================================
-*/
-
-app.post("/prescribe", prescriptionHandler);
-
-/*
-================================================
-SERVER START
-================================================
-*/
-
-app.listen(PORT, "0.0.0.0", () => {
-
-  console.log(`🚀 GJHealth AI Orchestrator running on port ${PORT}`);
-
+app.listen(8087, () => {
+  console.log("AI Orchestrator running on port 8087");
 });
-
-/*
-================================================
-AUTO HEARTBEAT LOOP
-================================================
-*/
-
-setInterval(() => {
-  sendHeartbeat();
-}, 30000);
