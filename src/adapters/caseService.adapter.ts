@@ -154,3 +154,27 @@ export async function getEncounterTimeline(encounterId: string) {
 
   return res.json();
 }
+
+/*
+================================================
+STORE AI TRIAGE
+================================================
+*/
+
+export async function storeAITriage(encounterId: string, triage: any) {
+
+  const res = await fetch(`${CASE_API}/encounters/${encounterId}/triage`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(triage)
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to store AI triage");
+  }
+
+  return res.json();
+}
+
