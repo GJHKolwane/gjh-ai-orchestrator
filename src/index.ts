@@ -6,229 +6,264 @@ import { prescriptionHandler } from "./handlers/prescription.handler.js";
 
 import {
   createPatient,
-    createEncounter,
-      storeVitals,
-        storeSymptoms,
-          storeNotes
-          } from "./adapters/caseService.adapter.js";
+  createEncounter,
+  storeVitals,
+  storeSymptoms,
+  storeNotes,
+  storeTreatmentDecision
+} from "./adapters/caseService.adapter.js";
 
-          import { sendHeartbeat } from "./offline/heartbeatSender.js";
+import { sendHeartbeat } from "./offline/heartbeatSender.js";
 
-          const app = express();
-          const PORT = Number(process.env.PORT) || 8087;
+const app = express();
+const PORT = Number(process.env.PORT) || 8087;
 
-          /*
-          ================================================
-          MIDDLEWARE
-          ================================================
-          */
+/*
+================================================
+MIDDLEWARE
+================================================
+*/
 
-          app.use(cors());
-          app.use(express.json());
+app.use(cors());
+app.use(express.json());
 
-          /*
-          ================================================
-          HEALTH CHECK
-          ================================================
-          */
+/*
+================================================
+HEALTH CHECK
+================================================
+*/
 
-          app.get("/health", (_req: Request, res: Response) => {
+app.get("/health", (_req: Request, res: Response) => {
 
-            res.status(200).json({
-                status: "ok",
-                    service: "gjh-ai-orchestrator",
-                        region: process.env.GCP_REGION || "europe-west1",
-                            timestamp: new Date().toISOString()
-                              });
+  res.status(200).json({
+    status: "ok",
+    service: "gjh-ai-orchestrator",
+    region: process.env.GCP_REGION || "europe-west1",
+    timestamp: new Date().toISOString()
+  });
 
-                              });
+});
 
-                              /*
-                              ================================================
-                              CLINICAL INTAKE
-                              ================================================
-                              */
+/*
+================================================
+CLINICAL INTAKE
+================================================
+*/
 
-                              app.post("/clinical/intake", async (req: Request, res: Response) => {
+app.post("/clinical/intake", async (req: Request, res: Response) => {
 
-                                try {
+  try {
 
-                                    const { omang } = req.body;
+    const { omang } = req.body;
 
-                                        if (!omang) {
-                                              return res.status(400).json({ error: "omang required" });
-                                                  }
+    if (!omang) {
+      return res.status(400).json({ error: "omang required" });
+    }
 
-                                                      const patient = await createPatient({
-                                                            name: omang,
-                                                                  identifier: omang
-                                                                      });
+    const patient = await createPatient({
+      name: omang,
+      identifier: omang
+    });
 
-                                                                          const encounter = await createEncounter(patient.id);
+    const encounter = await createEncounter(patient.id);
 
-                                                                              res.json({
-                                                                                    patientId: patient.id,
-                                                                                          encounterId: encounter.id
-                                                                                              });
+    res.json({
+      patientId: patient.id,
+      encounterId: encounter.id
+    });
 
-                                                                                                } catch (err) {
+  } catch (err) {
 
-                                                                                                    console.error("Intake error:", err);
+    console.error("Intake error:", err);
 
-                                                                                                        res.status(500).json({
-                                                                                                              error: "Clinical intake failed"
-                                                                                                                  });
+    res.status(500).json({
+      error: "Clinical intake failed"
+    });
 
-                                                                                                                    }
+  }
 
-                                                                                                                    });
+});
 
-                                                                                                                    /*
-                                                                                                                    ================================================
-                                                                                                                    STORE VITALS
-                                                                                                                    ================================================
-                                                                                                                    */
+/*
+================================================
+STORE VITALS
+================================================
+*/
 
-                                                                                                                    app.post("/clinical/vitals", async (req: Request, res: Response) => {
+app.post("/clinical/vitals", async (req: Request, res: Response) => {
 
-                                                                                                                      try {
+  try {
 
-                                                                                                                          const { encounterId, vitals } = req.body;
+    const { encounterId, vitals } = req.body;
 
-                                                                                                                              if (!encounterId) {
-                                                                                                                                    return res.status(400).json({ error: "encounterId required" });
-                                                                                                                                        }
+    if (!encounterId) {
+      return res.status(400).json({ error: "encounterId required" });
+    }
 
-                                                                                                                                            const result = await storeVitals(encounterId, vitals);
+    const result = await storeVitals(encounterId, vitals);
 
-                                                                                                                                                res.json(result);
+    res.json(result);
 
-                                                                                                                                                  } catch (err) {
+  } catch (err) {
 
-                                                                                                                                                      console.error("Vitals error:", err);
+    console.error("Vitals error:", err);
 
-                                                                                                                                                          res.status(500).json({
-                                                                                                                                                                error: "Failed to store vitals"
-                                                                                                                                                                    });
+    res.status(500).json({
+      error: "Failed to store vitals"
+    });
 
-                                                                                                                                                                      }
+  }
 
-                                                                                                                                                                      });
+});
 
-                                                                                                                                                                      /*
-                                                                                                                                                                      ================================================
-                                                                                                                                                                      STORE SYMPTOMS
-                                                                                                                                                                      ================================================
-                                                                                                                                                                      */
+/*
+================================================
+STORE SYMPTOMS
+================================================
+*/
 
-                                                                                                                                                                      app.post("/clinical/symptoms", async (req: Request, res: Response) => {
+app.post("/clinical/symptoms", async (req: Request, res: Response) => {
 
-                                                                                                                                                                        try {
+  try {
 
-                                                                                                                                                                            const { encounterId, symptoms } = req.body;
+    const { encounterId, symptoms } = req.body;
 
-                                                                                                                                                                                if (!encounterId) {
-                                                                                                                                                                                      return res.status(400).json({ error: "encounterId required" });
-                                                                                                                                                                                          }
+    if (!encounterId) {
+      return res.status(400).json({ error: "encounterId required" });
+    }
 
-                                                                                                                                                                                              const result = await storeSymptoms(encounterId, symptoms);
+    const result = await storeSymptoms(encounterId, symptoms);
 
-                                                                                                                                                                                                  res.json(result);
+    res.json(result);
 
-                                                                                                                                                                                                    } catch (err) {
+  } catch (err) {
 
-                                                                                                                                                                                                        console.error("Symptoms error:", err);
+    console.error("Symptoms error:", err);
 
-                                                                                                                                                                                                            res.status(500).json({
-                                                                                                                                                                                                                  error: "Failed to store symptoms"
-                                                                                                                                                                                                                      });
+    res.status(500).json({
+      error: "Failed to store symptoms"
+    });
 
-                                                                                                                                                                                                                        }
+  }
 
-                                                                                                                                                                                                                        });
+});
 
-                                                                                                                                                                                                                        /*
-                                                                                                                                                                                                                        ================================================
-                                                                                                                                                                                                                        STORE NOTES
-                                                                                                                                                                                                                        ================================================
-                                                                                                                                                                                                                        */
+/*
+================================================
+STORE NURSE NOTES
+================================================
+*/
 
-                                                                                                                                                                                                                        app.post("/clinical/notes", async (req: Request, res: Response) => {
+app.post("/clinical/notes", async (req: Request, res: Response) => {
 
-                                                                                                                                                                                                                          try {
+  try {
 
-                                                                                                                                                                                                                              const { encounterId, notes } = req.body;
+    const { encounterId, notes } = req.body;
 
-                                                                                                                                                                                                                                  if (!encounterId) {
-                                                                                                                                                                                                                                        return res.status(400).json({ error: "encounterId required" });
-                                                                                                                                                                                                                                            }
+    if (!encounterId) {
+      return res.status(400).json({ error: "encounterId required" });
+    }
 
-                                                                                                                                                                                                                                                const result = await storeNotes(encounterId, notes);
+    const result = await storeNotes(encounterId, notes);
 
-                                                                                                                                                                                                                                                    res.json(result);
+    res.json(result);
 
-                                                                                                                                                                                                                                                      } catch (err) {
+  } catch (err) {
 
-                                                                                                                                                                                                                                                          console.error("Notes error:", err);
+    console.error("Notes error:", err);
 
-                                                                                                                                                                                                                                                              res.status(500).json({
-                                                                                                                                                                                                                                                                    error: "Failed to store notes"
-                                                                                                                                                                                                                                                                        });
+    res.status(500).json({
+      error: "Failed to store notes"
+    });
 
-                                                                                                                                                                                                                                                                          }
+  }
 
-                                                                                                                                                                                                                                                                          });
+});
 
-                                                                                                                                                                                                                                                                          /*
-                                                                                                                                                                                                                                                                          ================================================
-                                                                                                                                                                                                                                                                          AI TRIAGE
-                                                                                                                                                                                                                                                                          ================================================
-                                                                                                                                                                                                                                                                          */
+/*
+================================================
+AI TRIAGE
+================================================
+*/
 
-                                                                                                                                                                                                                                                                          app.post("/triage/nurse", async (req: Request, res: Response) => {
+app.post("/triage/nurse", async (req: Request, res: Response) => {
 
-                                                                                                                                                                                                                                                                            try {
+  try {
 
-                                                                                                                                                                                                                                                                                await nurseTriageHandler(req, res);
+    await nurseTriageHandler(req, res);
 
-                                                                                                                                                                                                                                                                                  } catch (err) {
+  } catch (err) {
 
-                                                                                                                                                                                                                                                                                      console.error("Unhandled handler error:", err);
+    console.error("Unhandled handler error:", err);
 
-                                                                                                                                                                                                                                                                                          res.status(500).json({
-                                                                                                                                                                                                                                                                                                error: "Unhandled server error"
-                                                                                                                                                                                                                                                                                                    });
+    res.status(500).json({
+      error: "Unhandled server error"
+    });
 
-                                                                                                                                                                                                                                                                                                      }
+  }
 
-                                                                                                                                                                                                                                                                                                      });
+});
 
-                                                                                                                                                                                                                                                                                                      /*
-                                                                                                                                                                                                                                                                                                      ================================================
-                                                                                                                                                                                                                                                                                                      PRESCRIPTION
-                                                                                                                                                                                                                                                                                                      ================================================
-                                                                                                                                                                                                                                                                                                      */
+/*
+================================================
+TREATMENT DECISION
+================================================
+*/
 
-                                                                                                                                                                                                                                                                                                      app.post("/prescribe", prescriptionHandler);
+app.post("/clinical/treatment-decision", async (req: Request, res: Response) => {
 
-                                                                                                                                                                                                                                                                                                      /*
-                                                                                                                                                                                                                                                                                                      ================================================
-                                                                                                                                                                                                                                                                                                      SERVER START
-                                                                                                                                                                                                                                                                                                      ================================================
-                                                                                                                                                                                                                                                                                                      */
+  try {
 
-                                                                                                                                                                                                                                                                                                      app.listen(PORT, "0.0.0.0", () => {
+    const { encounterId, decision } = req.body;
 
-                                                                                                                                                                                                                                                                                                        console.log(`🚀 GJHealth AI Orchestrator running on port ${PORT}`);
+    if (!encounterId) {
+      return res.status(400).json({
+        error: "encounterId required"
+      });
+    }
 
-                                                                                                                                                                                                                                                                                                        });
+    const result = await storeTreatmentDecision(encounterId, decision);
 
-                                                                                                                                                                                                                                                                                                        /*
-                                                                                                                                                                                                                                                                                                        ================================================
-                                                                                                                                                                                                                                                                                                        AUTO HEARTBEAT LOOP
-                                                                                                                                                                                                                                                                                                        ================================================
-                                                                                                                                                                                                                                                                                                        */
+    res.json(result);
 
-                                                                                                                                                                                                                                                                                                        setInterval(() => {
-                                                                                                                                                                                                                                                                                                          sendHeartbeat();
-                                                                                                                                                                                                                                                                                                          }, 30000);
+  } catch (err) {
+
+    console.error("Treatment decision error:", err);
+
+    res.status(500).json({
+      error: "Failed to store treatment decision"
+    });
+
+  }
+
+});
+
+/*
+================================================
+PRESCRIPTION
+================================================
+*/
+
+app.post("/prescribe", prescriptionHandler);
+
+/*
+================================================
+SERVER START
+================================================
+*/
+
+app.listen(PORT, "0.0.0.0", () => {
+
+  console.log(`🚀 GJHealth AI Orchestrator running on port ${PORT}`);
+
+});
+
+/*
+================================================
+AUTO HEARTBEAT LOOP
+================================================
+*/
+
+setInterval(() => {
+  sendHeartbeat();
+}, 30000);
