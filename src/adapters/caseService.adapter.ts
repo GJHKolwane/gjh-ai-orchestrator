@@ -1,4 +1,12 @@
-const CASE_API = process.env.CASE_API || "http://localhost:5050";
+/*
+================================================
+CASE SERVICE CONFIG
+================================================
+*/
+
+const CASE_API =
+  process.env.CASE_API ||
+  "https://studious-eureka-97r6r77x6rqr2p4gv-5050.app.github.dev";
 
 /*
 ================================================
@@ -17,7 +25,8 @@ export async function createPatient(data: any) {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to create patient");
+    const text = await res.text();
+    throw new Error(`Failed to create patient: ${text}`);
   }
 
   return res.json();
@@ -40,7 +49,8 @@ export async function createEncounter(patientId: string) {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to create encounter");
+    const text = await res.text();
+    throw new Error(`Failed to create encounter: ${text}`);
   }
 
   return res.json();
@@ -63,7 +73,8 @@ export async function storeVitals(encounterId: string, vitals: any) {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to store vitals");
+    const text = await res.text();
+    throw new Error(`Failed to store vitals: ${text}`);
   }
 
   return res.json();
@@ -86,7 +97,8 @@ export async function storeSymptoms(encounterId: string, symptoms: any) {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to store symptoms");
+    const text = await res.text();
+    throw new Error(`Failed to store symptoms: ${text}`);
   }
 
   return res.json();
@@ -109,7 +121,8 @@ export async function storeNotes(encounterId: string, notes: any) {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to store notes");
+    const text = await res.text();
+    throw new Error(`Failed to store notes: ${text}`);
   }
 
   return res.json();
@@ -132,7 +145,8 @@ export async function storeDoctorNotes(encounterId: string, notes: any) {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to store doctor notes");
+    const text = await res.text();
+    throw new Error(`Failed to store doctor notes: ${text}`);
   }
 
   return res.json();
@@ -149,7 +163,8 @@ export async function getEncounterTimeline(encounterId: string) {
   const res = await fetch(`${CASE_API}/encounters/${encounterId}/timeline`);
 
   if (!res.ok) {
-    throw new Error("Failed to load encounter timeline");
+    const text = await res.text();
+    throw new Error(`Failed to load encounter timeline: ${text}`);
   }
 
   return res.json();
@@ -172,7 +187,8 @@ export async function storeAITriage(encounterId: string, triage: any) {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to store AI triage");
+    const text = await res.text();
+    throw new Error(`Failed to store AI triage: ${text}`);
   }
 
   return res.json();
@@ -198,9 +214,9 @@ export async function storeTreatmentDecision(
   });
 
   if (!res.ok) {
-    throw new Error("Failed to store treatment decision");
+    const text = await res.text();
+    throw new Error(`Failed to store treatment decision: ${text}`);
   }
 
   return res.json();
-}
-
+    }
