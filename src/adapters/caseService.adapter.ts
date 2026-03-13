@@ -178,3 +178,29 @@ export async function storeAITriage(encounterId: string, triage: any) {
   return res.json();
 }
 
+/*
+================================================
+STORE TREATMENT DECISION
+================================================
+*/
+
+export async function storeTreatmentDecision(
+  encounterId: string,
+  decision: any
+) {
+
+  const res = await fetch(`${CASE_API}/encounters/${encounterId}/treatment-decision`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(decision)
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to store treatment decision");
+  }
+
+  return res.json();
+}
+
