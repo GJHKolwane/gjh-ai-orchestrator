@@ -4,9 +4,62 @@ CASE SERVICE CONFIG
 ================================================
 */
 
+import { enqueueOffline } from "../offline/offlineQueue.js";
+
 const CASE_API =
   process.env.CASE_API ||
   "https://studious-eureka-97r6r77x6rqr2p4gv-5050.app.github.dev";
+
+/*
+================================================
+SAFE REQUEST WRAPPER
+================================================
+Handles offline fallback automatically
+*/
+
+async function safeRequest(endpoint: string, method: string, payload?: any) {
+
+  try {
+
+    const res = await fetch(`${CASE_API}${endpoint}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: payload ? JSON.stringify(payload) : undefined
+    });
+
+    if (!res.ok) {
+
+      console.warn("CASE service error — storing offline:", endpoint);
+
+      enqueueOffline({
+        endpoint,
+        method,
+        payload
+      });
+
+      return { status: "stored_offline" };
+
+    }
+
+    return res.json();
+
+  } catch (err) {
+
+    console.warn("CASE service unreachable — storing offline:", endpoint);
+
+    enqueueOffline({
+      endpoint,
+      method,
+      payload
+    });
+
+    return { status: "stored_offline" };
+
+  }
+
+}
 
 /*
 ================================================
@@ -16,20 +69,8 @@ CREATE PATIENT
 
 export async function createPatient(data: any) {
 
-  const res = await fetch(`${CASE_API}/patients`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(data)
-  });
+  return safeRequest("/patients", "POST", data);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to create patient: ${text}`);
-  }
-
-  return res.json();
 }
 
 /*
@@ -40,44 +81,20 @@ CREATE ENCOUNTER
 
 export async function createEncounter(patientId: string) {
 
-  const res = await fetch(`${CASE_API}/encounters`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ patientId })
-  });
+  return safeRequest("/encounters", "POST", { patientId });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to create encounter: ${text}`);
-  }
-
-  return res.json();
 }
 
 /*
 ================================================
-SET ENCOUNTER STAGE (NEW FIX)
+SET ENCOUNTER STAGE
 ================================================
 */
 
 export async function setEncounterStage(encounterId: string, stage: string) {
 
-  const res = await fetch(`${CASE_API}/encounters/${encounterId}/stage`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ stage })
-  });
+  return safeRequest(`/encounters/${encounterId}/stage`, "POST", { stage });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to set encounter stage: ${text}`);
-  }
-
-  return res.json();
 }
 
 /*
@@ -88,20 +105,8 @@ STORE VITALS
 
 export async function storeVitals(encounterId: string, vitals: any) {
 
-  const res = await fetch(`${CASE_API}/encounters/${encounterId}/vitals`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(vitals)
-  });
+  return safeRequest(`/encounters/${encounterId}/vitals`, "POST", vitals);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to store vitals: ${text}`);
-  }
-
-  return res.json();
 }
 
 /*
@@ -112,20 +117,8 @@ STORE SYMPTOMS
 
 export async function storeSymptoms(encounterId: string, symptoms: any) {
 
-  const res = await fetch(`${CASE_API}/encounters/${encounterId}/symptoms`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(symptoms)
-  });
+  return safeRequest(`/encounters/${encounterId}/symptoms`, "POST", symptoms);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to store symptoms: ${text}`);
-  }
-
-  return res.json();
 }
 
 /*
@@ -136,20 +129,8 @@ STORE NURSE NOTES
 
 export async function storeNotes(encounterId: string, notes: any) {
 
-  const res = await fetch(`${CASE_API}/encounters/${encounterId}/notes`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ notes })
-  });
+  return safeRequest(`/encounters/${encounterId}/notes`, "POST", { notes });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to store notes: ${text}`);
-  }
-
-  return res.json();
 }
 
 /*
@@ -160,20 +141,8 @@ STORE DOCTOR NOTES
 
 export async function storeDoctorNotes(encounterId: string, notes: any) {
 
-  const res = await fetch(`${CASE_API}/encounters/${encounterId}/doctor-notes`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(notes)
-  });
+  return safeRequest(`/encounters/${encounterId}/doctor-notes`, "POST", notes);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to store doctor notes: ${text}`);
-  }
-
-  return res.json();
 }
 
 /*
@@ -184,14 +153,24 @@ FETCH TIMELINE
 
 export async function getEncounterTimeline(encounterId: string) {
 
-  const res = await fetch(`${CASE_API}/encounters/${encounterId}/timeline`);
+  try {
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to load encounter timeline: ${text}`);
+    const res = await fetch(`${CASE_API}/encounters/${encounterId}/timeline`);
+
+    if (!res.ok) {
+      throw new Error("Timeline fetch failed");
+    }
+
+    return res.json();
+
+  } catch (err) {
+
+    console.error("Timeline fetch error:", err);
+
+    throw err;
+
   }
 
-  return res.json();
 }
 
 /*
@@ -202,20 +181,8 @@ STORE AI TRIAGE
 
 export async function storeAITriage(encounterId: string, triage: any) {
 
-  const res = await fetch(`${CASE_API}/encounters/${encounterId}/triage`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(triage)
-  });
+  return safeRequest(`/encounters/${encounterId}/triage`, "POST", triage);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to store AI triage: ${text}`);
-  }
-
-  return res.json();
 }
 
 /*
@@ -229,18 +196,10 @@ export async function storeTreatmentDecision(
   decision: any
 ) {
 
-  const res = await fetch(`${CASE_API}/encounters/${encounterId}/treatment-decision`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(decision)
-  });
+  return safeRequest(
+    `/encounters/${encounterId}/treatment-decision`,
+    "POST",
+    decision
+  );
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to store treatment decision: ${text}`);
-  }
-
-  return res.json();
 }
