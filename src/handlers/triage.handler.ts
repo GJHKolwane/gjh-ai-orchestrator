@@ -5,100 +5,131 @@ import { AIMode } from "../orchestrator/ai.modes.js";
 
 import {
   getEncounterTimeline,
-    storeAITriage
-    } from "../adapters/caseService.adapter.js";
+  storeAITriage
+} from "../adapters/caseService.adapter.js";
 
-    import { buildClinicalPrompt } from "../clinical/promptBuilder.js";
+import { buildClinicalPrompt } from "../clinical/promptBuilder.js";
+
+/*
+================================================
+AI TRIAGE HANDLER
+================================================
+Runs AI triage and returns structured JSON
+*/
+
+export async function nurseTriageHandler(req: Request, res: Response) {
+
+  try {
+
+    const { encounterId } = req.body;
+
+    if (!encounterId) {
+      return res.status(400).json({
+        error: "encounterId required"
+      });
+    }
 
     /*
-    ================================================
-    AI TRIAGE HANDLER
-    ================================================
+    ==========================================
+    LOAD CLINICAL TIMELINE
+    ==========================================
     */
 
-    export async function nurseTriageHandler(req: Request, res: Response) {
+    const timeline = await getEncounterTimeline(encounterId);
 
-      try {
+    const { patient, timeline: events } = timeline;
 
-          const { encounterId } = req.body;
+    const latestVitals = events.vitals?.slice(-1)[0] || {};
+    const symptoms = events.symptoms || [];
+    const notes = events.notes || [];
 
-              if (!encounterId) {
-                    return res.status(400).json({
-                            error: "encounterId required"
-                                  });
-                                      }
+    /*
+    ==========================================
+    BUILD AI PROMPT
+    ==========================================
+    */
 
-                                          /*
-                                              ==========================================
-                                                  LOAD CLINICAL TIMELINE
-                                                      ==========================================
-                                                          */
+    const prompt = buildClinicalPrompt(
+      patient,
+      latestVitals,
+      symptoms,
+      notes
+    );
 
-                                                              const timeline = await getEncounterTimeline(encounterId);
+    /*
+    ==========================================
+    RUN AI
+    ==========================================
+    */
 
-                                                                  const { patient, timeline: events } = timeline;
+    const aiResult = await orchestrateAI({
+      consultationId: encounterId,
+      actor: "AI_TRIAGE",
+      mode: AIMode.CLINICAL,
+      prompt
+    });
 
-                                                                      const latestVitals = events.vitals?.slice(-1)[0];
-                                                                          const symptoms = events.symptoms || [];
-                                                                              const notes = events.notes || [];
+    /*
+    ==========================================
+    PARSE AI OUTPUT SAFELY
+    ==========================================
+    */
 
-                                                                                  /*
-                                                                                      ==========================================
-                                                                                          BUILD AI PROMPT
-                                                                                              ==========================================
-                                                                                                  */
+    let parsed;
 
-                                                                                                      const prompt = buildClinicalPrompt(
-                                                                                                            patient,
-                                                                                                                  latestVitals,
-                                                                                                                        symptoms,
-                                                                                                                              notes
-                                                                                                                                  );
+    try {
 
-                                                                                                                                      /*
-                                                                                                                                          ==========================================
-                                                                                                                                              RUN AI
-                                                                                                                                                  ==========================================
-                                                                                                                                                      */
+      parsed = JSON.parse(aiResult.output);
 
-                                                                                                                                                          const aiResult = await orchestrateAI({
-                                                                                                                                                                consultationId: encounterId,
-                                                                                                                                                                      actor: "AI_TRIAGE",
-                                                                                                                                                                            mode: AIMode.CLINICAL,
-                                                                                                                                                                                  prompt
-                                                                                                                                                                                      });
+    } catch (parseErr) {
 
-                                                                                                                                                                                          /*
-                                                                                                                                                                                              ==========================================
-                                                                                                                                                                                                  STORE AI TRIAGE
-                                                                                                                                                                                                      ==========================================
-                                                                                                                                                                                                          */
+      console.error("AI returned invalid JSON:", aiResult.output);
 
-                                                                                                                                                                                                              await storeAITriage(encounterId, {
-                                                                                                                                                                                                                    model: aiResult.source,
-                                                                                                                                                                                                                          recommendation: aiResult.output,
-                                                                                                                                                                                                                                createdAt: new Date().toISOString()
-                                                                                                                                                                                                                                    });
+      parsed = {
+        riskLevel: "UNKNOWN",
+        observations: [],
+        considerations: [],
+        reasoning: "AI response could not be parsed.",
+        aiSuggestion: null
+      };
 
-                                                                                                                                                                                                                                        /*
-                                                                                                                                                                                                                                            ==========================================
-                                                                                                                                                                                                                                                RESPONSE
-                                                                                                                                                                                                                                                    ==========================================
-                                                                                                                                                                                                                                                        */
+    }
 
-                                                                                                                                                                                                                                                            res.json({
-                                                                                                                                                                                                                                                                  encounterId,
-                                                                                                                                                                                                                                                                        triage: aiResult.output
-                                                                                                                                                                                                                                                                            });
+    /*
+    ==========================================
+    STORE STRUCTURED TRIAGE
+    ==========================================
+    */
 
-                                                                                                                                                                                                                                                                              } catch (err) {
+    await storeAITriage(encounterId, {
+      model: aiResult.source,
+      riskLevel: parsed.riskLevel,
+      observations: parsed.observations,
+      considerations: parsed.considerations,
+      reasoning: parsed.reasoning,
+      aiSuggestion: parsed.aiSuggestion,
+      createdAt: new Date().toISOString()
+    });
 
-                                                                                                                                                                                                                                                                                  console.error("Triage error:", err);
+    /*
+    ==========================================
+    RESPONSE
+    ==========================================
+    */
 
-                                                                                                                                                                                                                                                                                      res.status(500).json({
-                                                                                                                                                                                                                                                                                            error: "Triage failed"
-                                                                                                                                                                                                                                                                                                });
+    res.json({
+      encounterId,
+      triage: parsed
+    });
 
-                                                                                                                                                                                                                                                                                                  }
+  } catch (err) {
 
-                                                                                                                                                                                                                                                                                                  }
+    console.error("Triage error:", err);
+
+    res.status(500).json({
+      error: "Triage failed"
+    });
+
+  }
+
+}
