@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import "dotenv/config";
+import { syncOfflineQueue } from "./offline/offlineSync.js";
 
 import { nurseTriageHandler } from "./handlers/triage.handler.js";
 import { prescriptionHandler } from "./handlers/prescription.handler.js";
@@ -309,5 +310,9 @@ AUTO HEARTBEAT LOOP
 */
 
 setInterval(() => {
+
   sendHeartbeat();
+
+  syncOfflineQueue();
+
 }, 30000);
