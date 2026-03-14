@@ -9,25 +9,27 @@ import {
 } from "../adapters/caseService.adapter.js";
 
 import { buildClinicalPrompt } from "../clinical/promptBuilder.js";
+import { runOfflineTriage } from "../clinical/offlineTriageEngine.js";
 
 /*
 ================================================
 AI TRIAGE HANDLER
 ================================================
-Runs AI triage and returns structured JSON
+Runs AI triage and falls back to offline rules
+when AI services are unreachable.
 */
 
 export async function nurseTriageHandler(req: Request, res: Response) {
 
+  const { encounterId } = req.body;
+
+  if (!encounterId) {
+    return res.status(400).json({
+      error: "encounterId required"
+    });
+  }
+
   try {
-
-    const { encounterId } = req.body;
-
-    if (!encounterId) {
-      return res.status(400).json({
-        error: "encounterId required"
-      });
-    }
 
     /*
     ==========================================
@@ -56,58 +58,70 @@ export async function nurseTriageHandler(req: Request, res: Response) {
       notes
     );
 
-    /*
-    ==========================================
-    RUN AI
-    ==========================================
-    */
-
-    const aiResult = await orchestrateAI({
-      consultationId: encounterId,
-      actor: "AI_TRIAGE",
-      mode: AIMode.CLINICAL,
-      prompt
-    });
-
-    /*
-    ==========================================
-    PARSE AI OUTPUT SAFELY
-    ==========================================
-    */
-
     let parsed;
 
     try {
 
-      parsed = JSON.parse(aiResult.output);
+      /*
+      ==========================================
+      RUN CLOUD AI
+      ==========================================
+      */
 
-    } catch (parseErr) {
+      const aiResult = await orchestrateAI({
+        consultationId: encounterId,
+        actor: "AI_TRIAGE",
+        mode: AIMode.CLINICAL,
+        prompt
+      });
 
-      console.error("AI returned invalid JSON:", aiResult.output);
+      /*
+      ==========================================
+      PARSE AI OUTPUT SAFELY
+      ==========================================
+      */
 
-      parsed = {
-        riskLevel: "UNKNOWN",
-        observations: [],
-        considerations: [],
-        reasoning: "AI response could not be parsed.",
-        aiSuggestion: null
-      };
+      try {
+
+        parsed = JSON.parse(aiResult.output);
+
+      } catch (parseErr) {
+
+        console.warn("AI returned invalid JSON, falling back to offline triage");
+
+        parsed = runOfflineTriage(patient, latestVitals, symptoms);
+
+      }
+
+      parsed.source = aiResult.source;
+
+    } catch (aiError) {
+
+      /*
+      ==========================================
+      OFFLINE FALLBACK
+      ==========================================
+      */
+
+      console.warn("AI unreachable — switching to offline triage");
+
+      parsed = runOfflineTriage(patient, latestVitals, symptoms);
 
     }
 
     /*
     ==========================================
-    STORE STRUCTURED TRIAGE
+    STORE TRIAGE RESULT
     ==========================================
     */
 
     await storeAITriage(encounterId, {
-      model: aiResult.source,
+      model: parsed.source || "OFFLINE_RULE_ENGINE",
       riskLevel: parsed.riskLevel,
       observations: parsed.observations,
       considerations: parsed.considerations,
-      reasoning: parsed.reasoning,
-      aiSuggestion: parsed.aiSuggestion,
+      reasoning: parsed.reasoning || "",
+      aiSuggestion: parsed.aiSuggestion || null,
       createdAt: new Date().toISOString()
     });
 
@@ -124,12 +138,12 @@ export async function nurseTriageHandler(req: Request, res: Response) {
 
   } catch (err) {
 
-    console.error("Triage error:", err);
+    console.error("Triage system failure:", err);
 
     res.status(500).json({
-      error: "Triage failed"
+      error: "Triage system unavailable"
     });
 
   }
 
-}
+      }
