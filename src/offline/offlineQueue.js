@@ -1,7 +1,15 @@
 import fs from "fs";
 import path from "path";
 
+/*
+================================================
+CONFIGURATION
+================================================
+*/
+
 const queueFile = path.join("data", "offlineQueue.json");
+
+const MAX_QUEUE_SIZE = 500;
 
 /*
 ================================================
@@ -72,6 +80,21 @@ export function enqueueOffline(item) {
     createdAt: new Date().toISOString()
   });
 
+  /*
+  ========================================================
+  QUEUE SIZE PROTECTION
+  Prevent infinite growth during long outages
+  ========================================================
+  */
+
+  if (queue.length > MAX_QUEUE_SIZE) {
+
+    console.warn("Offline queue limit reached — removing oldest event");
+
+    queue.shift();
+
+  }
+
   saveQueue(queue);
 
-                  }
+    }
