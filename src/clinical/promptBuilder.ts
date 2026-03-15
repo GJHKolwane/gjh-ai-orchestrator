@@ -1,106 +1,95 @@
 /*
 ================================================
-AI PROMPT BUILDER
+CLINICAL PROMPT BUILDER
 ================================================
-Builds structured prompt for clinical triage AI
-Ensures AI returns strict JSON format
+
+Builds structured AI prompt for triage analysis
+based on nurse inputs and patient timeline
 */
 
-export function buildClinicalPrompt(
-  patient: any,
-  vitals: any,
-  symptoms: any[],
-  notes: any[]
-) {
+export function buildClinicalPrompt(patient, vitals, symptoms, notes) {
 
-  const patientName = patient?.name || "unknown";
-  const patientGender = patient?.gender || "unknown";
+  /*
+  ================================================
+  FORMAT VITALS
+  ================================================
+  */
 
-  const vitalsBlock = JSON.stringify(vitals || {}, null, 2);
-  const symptomsBlock = JSON.stringify(symptoms || [], null, 2);
-  const notesBlock = JSON.stringify(notes || [], null, 2);
+  const vitalsText = vitals
+    ? `
+Temperature: ${vitals.temperature || "not recorded"}
+Blood Pressure: ${vitals.bloodPressure || "not recorded"}
+Heart Rate: ${vitals.heartRate || "not recorded"}
+`
+    : "No vitals recorded.";
+
+  /*
+  ================================================
+  FORMAT SYMPTOMS
+  ================================================
+  */
+
+  const symptomText = Array.isArray(symptoms) && symptoms.length > 0
+    ? symptoms.map((s) => `- ${s.name}`).join("\n")
+    : "No symptoms recorded.";
+
+  /*
+  ================================================
+  FORMAT NOTES
+  ================================================
+  */
+
+  const notesText = notes && notes.length
+    ? notes.map((n) => `- ${n}`).join("\n")
+    : "No nurse notes recorded.";
+
+  /*
+  ================================================
+  CLINICAL TRIAGE PROMPT
+  ================================================
+  */
 
   return `
+You are a clinical triage support AI assisting a nurse in a rural healthcare facility.
 
-You are a clinical decision support assistant for healthcare professionals.
+Analyze the patient information and provide structured clinical guidance.
 
-Your role is to assist nurses during triage by analyzing clinical information and
-providing structured clinical observations and risk classification.
-
-IMPORTANT RULES:
-
-• You DO NOT provide treatment instructions.
-• You DO NOT override clinical judgment.
-• You DO NOT command escalation.
-• You only provide clinical observations and a suggested risk classification.
-
-The nurse remains responsible for the final decision.
-
-------------------------------------------------
 PATIENT INFORMATION
-------------------------------------------------
+-------------------
+Identifier: ${patient?.identifier || "unknown"}
 
-Name: ${patientName}
-Gender: ${patientGender}
-
-------------------------------------------------
 VITAL SIGNS
-------------------------------------------------
+-----------
+${vitalsText}
 
-${vitalsBlock}
+REPORTED SYMPTOMS
+-----------------
+${symptomText}
 
-------------------------------------------------
-SYMPTOMS
-------------------------------------------------
-
-${symptomsBlock}
-
-------------------------------------------------
 NURSE CLINICAL NOTES
-------------------------------------------------
+--------------------
+${notesText}
 
-${notesBlock}
+TRIAGE TASK
+-----------
+Based on the available clinical information:
 
-------------------------------------------------
-TASK
-------------------------------------------------
+1. Identify key clinical observations
+2. Provide possible medical considerations
+3. Estimate risk level: LOW, MEDIUM, or HIGH
+4. Suggest possible clinical actions
 
-Analyze the clinical information and produce a structured triage output.
-
-Classify the clinical risk level as ONE of:
-
-LOW
-MEDIUM
-HIGH
-
-------------------------------------------------
-OUTPUT FORMAT
-------------------------------------------------
-
-You MUST return ONLY valid JSON.
-
-Do NOT include explanations outside JSON.
-
-The JSON must follow EXACTLY this structure:
+OUTPUT FORMAT (JSON ONLY):
 
 {
   "riskLevel": "LOW | MEDIUM | HIGH",
-  "observations": [
-    "clinical observation 1",
-    "clinical observation 2"
-  ],
-  "considerations": [
-    "possible condition or concern",
-    "possible complication"
-  ],
-  "reasoning": "Short clinical reasoning explaining the risk classification",
-  "aiSuggestion": "Optional suggestion such as 'consider escalation' or 'monitor patient'"
+  "observations": [],
+  "considerations": [],
+  "reasoning": "",
+  "aiSuggestion": ""
 }
 
-Remember:
-
-• AI provides support only.
-• The healthcare professional makes the final decision.
-
+Do NOT include explanations outside the JSON.
 `;
+
 }
