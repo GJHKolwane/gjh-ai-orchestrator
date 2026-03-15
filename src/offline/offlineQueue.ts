@@ -9,7 +9,7 @@ LOAD QUEUE
 ================================================
 */
 
-function loadQueue() {
+function loadQueue(): any[] {
 
   try {
 
@@ -17,7 +17,7 @@ function loadQueue() {
       return [];
     }
 
-    const raw = fs.readFileSync(queueFile);
+    const raw = fs.readFileSync(queueFile, "utf-8");
 
     return JSON.parse(raw);
 
@@ -37,7 +37,7 @@ SAVE QUEUE
 ================================================
 */
 
-function saveQueue(queue) {
+function saveQueue(queue: any[]) {
 
   try {
 
@@ -63,7 +63,7 @@ ADD ITEM TO QUEUE
 ================================================
 */
 
-export function enqueueOfflineItem(item) {
+export function enqueueOfflineItem(item: any) {
 
   const queue = loadQueue();
 
@@ -82,7 +82,7 @@ READ QUEUE
 ================================================
 */
 
-export function readOfflineQueue() {
+export function readOfflineQueue(): any[] {
 
   return loadQueue();
 
