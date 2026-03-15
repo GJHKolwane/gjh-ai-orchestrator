@@ -4,7 +4,7 @@ CASE SERVICE CONFIG
 ================================================
 */
 
-import { enqueueOfflineItem } from "../offline/offlineQueue.js";
+import { enqueueOfflineItem } from "../offline/offlineQueue";
 
 const CASE_API =
   process.env.CASE_API ||
