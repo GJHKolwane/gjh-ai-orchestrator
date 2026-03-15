@@ -1,15 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-/*
-================================================
-CONFIGURATION
-================================================
-*/
-
-const queueFile = path.join("data", "offlineQueue.json");
-
-const MAX_QUEUE_SIZE = 500;
+const queueFile = path.join("data", "clinicalOfflineQueue.json");
 
 /*
 ================================================
@@ -17,7 +9,7 @@ LOAD QUEUE
 ================================================
 */
 
-export function loadQueue() {
+function loadQueue() {
 
   try {
 
@@ -45,7 +37,7 @@ SAVE QUEUE
 ================================================
 */
 
-export function saveQueue(queue) {
+function saveQueue(queue) {
 
   try {
 
@@ -71,7 +63,7 @@ ADD TO QUEUE
 ================================================
 */
 
-export function enqueueOffline(item) {
+export function enqueueOfflineItem(item) {
 
   const queue = loadQueue();
 
@@ -80,21 +72,30 @@ export function enqueueOffline(item) {
     createdAt: new Date().toISOString()
   });
 
-  /*
-  ========================================================
-  QUEUE SIZE PROTECTION
-  Prevent infinite growth during long outages
-  ========================================================
-  */
-
-  if (queue.length > MAX_QUEUE_SIZE) {
-
-    console.warn("Offline queue limit reached — removing oldest event");
-
-    queue.shift();
-
-  }
-
   saveQueue(queue);
 
-    }
+}
+
+/*
+================================================
+READ QUEUE
+================================================
+*/
+
+export function readOfflineQueue() {
+
+  return loadQueue();
+
+}
+
+/*
+================================================
+CLEAR QUEUE
+================================================
+*/
+
+export function clearOfflineQueue() {
+
+  saveQueue([]);
+
+}
