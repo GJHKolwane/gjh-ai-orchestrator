@@ -1,5 +1,9 @@
 import fetch from "node-fetch";
-import { loadQueue, saveQueue } from "./offlineQueue.js";
+
+import {
+  readOfflineQueue,
+  clearOfflineQueue
+} from "./offlineQueue.js";
 
 const CASE_API =
   process.env.CASE_API ||
@@ -7,50 +11,87 @@ const CASE_API =
 
 /*
 ================================================
-SYNC OFFLINE EVENTS
+OFFLINE QUEUE SYNC
 ================================================
+Replays stored clinical operations
+when connectivity returns
 */
 
 export async function syncOfflineQueue() {
 
-  const queue = loadQueue();
+  try {
 
-  if (queue.length === 0) {
-    return;
-  }
+    const queue = readOfflineQueue();
 
-  console.log("Offline sync: processing", queue.length, "events");
+    if (!queue.length) {
+      return;
+    }
 
-  const remaining = [];
+    console.log("Syncing offline queue:", queue.length, "items");
 
-  for (const item of queue) {
+    const remaining = [];
 
-    try {
+    for (const item of queue) {
 
-      const res = await fetch(`${CASE_API}${item.endpoint}`, {
-        method: item.method,
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(item.payload)
-      });
+      try {
 
-      if (!res.ok) {
-        throw new Error("Request failed");
+        const res = await fetch(`${CASE_API}${item.endpoint}`, {
+          method: item.method,
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: item.payload
+            ? JSON.stringify(item.payload)
+            : undefined
+        });
+
+        if (!res.ok) {
+
+          console.warn("Replay failed:", item.endpoint);
+
+          remaining.push(item);
+
+          continue;
+
+        }
+
+        console.log("Replayed:", item.endpoint);
+
+      } catch (err) {
+
+        console.warn("Replay network error:", item.endpoint);
+
+        remaining.push(item);
+
       }
-
-      console.log("Offline event synced:", item.endpoint);
-
-    } catch (err) {
-
-      console.warn("Offline sync failed, keeping in queue");
-
-      remaining.push(item);
 
     }
 
-  }
+    if (remaining.length) {
 
-  saveQueue(remaining);
+      console.log("Remaining offline items:", remaining.length);
+
+      clearOfflineQueue();
+
+      const fs = await import("fs");
+      const path = await import("path");
+
+      const queueFile = path.join("data", "clinicalOfflineQueue.json");
+
+      fs.writeFileSync(queueFile, JSON.stringify(remaining, null, 2));
+
+    } else {
+
+      console.log("Offline queue fully synced");
+
+      clearOfflineQueue();
+
+    }
+
+  } catch (err) {
+
+    console.error("Offline sync failed:", err);
+
+  }
 
 }
