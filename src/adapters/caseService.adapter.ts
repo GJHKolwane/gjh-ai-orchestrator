@@ -4,7 +4,7 @@ CASE SERVICE CONFIG
 ================================================
 */
 
-import { enqueueOffline } from "../offline/offlineQueue.js";
+import { enqueueOfflineItem } from "../offline/offlineQueue.js";
 
 const CASE_API =
   process.env.CASE_API ||
@@ -13,8 +13,8 @@ const CASE_API =
 /*
 ================================================
 SAFE REQUEST WRAPPER
-================================================
 Handles offline fallback automatically
+================================================
 */
 
 async function safeRequest(endpoint: string, method: string, payload?: any) {
@@ -33,7 +33,7 @@ async function safeRequest(endpoint: string, method: string, payload?: any) {
 
       console.warn("CASE service error — storing offline:", endpoint);
 
-      enqueueOffline({
+      enqueueOfflineItem({
         endpoint,
         method,
         payload
@@ -49,7 +49,7 @@ async function safeRequest(endpoint: string, method: string, payload?: any) {
 
     console.warn("CASE service unreachable — storing offline:", endpoint);
 
-    enqueueOffline({
+    enqueueOfflineItem({
       endpoint,
       method,
       payload
