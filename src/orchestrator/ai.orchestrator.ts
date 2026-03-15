@@ -4,18 +4,15 @@ import {
   ConsoleAuditLogger,
   createAuditEvent
 } from "./audit.logger.js";
+
 import { AIMode } from "./ai.modes.js";
 import { assertAIModeAllows } from "./ai.guards.js";
 
 import { enforceHumanGate } from "../governance/humanGate.guard.js";
 
-/**
- * Orchestrator Input
- */
 export interface OrchestratorInput {
   consultationId: string;
   actor: "AI_TRIAGE" | "NURSE" | "DOCTOR";
-
   mode: AIMode;
 
   intent?: {
@@ -27,18 +24,12 @@ export interface OrchestratorInput {
   prompt: string;
 }
 
-/**
- * Orchestrator Output
- */
 export interface OrchestratorOutput {
   source: string;
   timestamp: string;
   output: string;
 }
 
-/**
- * Core AI Orchestrator
- */
 export async function orchestrateAI(
   input: OrchestratorInput,
   auditLogger: AuditLogger = new ConsoleAuditLogger()
@@ -78,7 +69,16 @@ export async function orchestrateAI(
 
   /*
   ======================================================
-  3️⃣ RESOLVE AI ADAPTER
+  3️⃣ CHECK AI CONFIG
+  ======================================================
+  */
+
+  console.log("AI Provider:", process.env.AI_PROVIDER);
+  console.log("OpenAI Key Loaded:", !!process.env.OPENAI_API_KEY);
+
+  /*
+  ======================================================
+  4️⃣ RESOLVE AI ADAPTER
   ======================================================
   */
 
@@ -86,7 +86,7 @@ export async function orchestrateAI(
 
   /*
   ======================================================
-  4️⃣ GENERATE AI OUTPUT
+  5️⃣ GENERATE AI OUTPUT
   ======================================================
   */
 
@@ -95,13 +95,17 @@ export async function orchestrateAI(
   });
 
   if (!result?.text) {
+
+    console.error("AI adapter returned empty result");
+
     throw new Error("AI adapter returned empty response");
   }
 
+  console.log("RAW AI OUTPUT:\n", result.text);
+
   /*
   ======================================================
-  5️⃣ HUMAN-IN-THE-LOOP SAFETY GUARD
-  Prevent AI from outputting treatment instructions
+  6️⃣ HUMAN SAFETY GATE
   ======================================================
   */
 
@@ -109,7 +113,7 @@ export async function orchestrateAI(
 
   /*
   ======================================================
-  6️⃣ AUDIT OUTPUT
+  7️⃣ AUDIT OUTPUT
   ======================================================
   */
 
@@ -128,14 +132,16 @@ export async function orchestrateAI(
 
   /*
   ======================================================
-  7️⃣ RETURN GOVERNED OUTPUT
+  8️⃣ RETURN RESULT
   ======================================================
   */
 
   return {
-    source: process.env.AI_PROVIDER || "mock",
+
+    source: process.env.AI_PROVIDER || "UNKNOWN_AI_PROVIDER",
     timestamp: new Date().toISOString(),
     output: safeOutput
+
   };
 
-    }
+}
