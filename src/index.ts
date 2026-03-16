@@ -12,19 +12,14 @@ import {
   storeVitals,
   storeSymptoms,
   storeNotes,
-  storeTreatmentDecision
+  storeTreatmentDecision,
+  setEncounterStage
 } from "./adapters/caseService.adapter.js";
 
 import { sendHeartbeat } from "./offline/heartbeatSender.js";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 8087;
-
-/*
-================================================
-MIDDLEWARE
-================================================
-*/
 
 app.use(cors());
 app.use(express.json());
@@ -56,60 +51,24 @@ app.post("/clinical/intake", async (req: Request, res: Response) => {
 
   try {
 
-    console.log("---- INTAKE REQUEST RECEIVED ----");
-
     const { omang } = req.body;
-
-    console.log("Request Body:", req.body);
 
     if (!omang) {
       return res.status(400).json({ error: "omang required" });
     }
 
-    console.log("OMANG validated:", omang);
-
-    /*
-    ================================================
-    CREATE PATIENT
-    ================================================
-    */
-
-    console.log("Calling Case MCP → createPatient");
-
     const patient = await createPatient({
-      name: omang,
-      identifier: omang
+      identifier: omang,
+      fullName: omang
     });
-
-    console.log("Patient creation result:", patient);
 
     const patientId = patient.id;
 
-    if (!patientId) {
-      console.error("Patient ID missing from MCP response");
-      throw new Error("Patient creation failed");
-    }
-
-    /*
-    ================================================
-    CREATE ENCOUNTER
-    ================================================
-    */
-
-    console.log("Calling Case MCP → createEncounter");
-
     const encounter = await createEncounter(patientId);
-
-    console.log("Encounter creation result:", encounter);
 
     const encounterId = encounter.id;
 
-    if (!encounterId) {
-      console.error("Encounter ID missing from MCP response");
-      throw new Error("Encounter creation failed");
-    }
-
-    console.log("---- INTAKE SUCCESS ----");
+    await setEncounterStage(encounterId, "intake");
 
     res.json({
       patientId,
@@ -118,8 +77,7 @@ app.post("/clinical/intake", async (req: Request, res: Response) => {
 
   } catch (err) {
 
-    console.error("INTAKE ERROR");
-    console.error(err);
+    console.error("INTAKE ERROR:", err);
 
     res.status(500).json({
       error: "Patient intake failed"
@@ -141,11 +99,15 @@ app.post("/clinical/vitals", async (req: Request, res: Response) => {
 
     const { encounterId, vitals } = req.body;
 
-    if (!encounterId) {
-      return res.status(400).json({ error: "encounterId required" });
+    if (!encounterId || !vitals) {
+      return res.status(400).json({
+        error: "encounterId and vitals required"
+      });
     }
 
     const result = await storeVitals(encounterId, vitals);
+
+    await setEncounterStage(encounterId, "triage");
 
     res.json(result);
 
@@ -174,7 +136,9 @@ app.post("/clinical/symptoms", async (req: Request, res: Response) => {
     const { encounterId, symptoms } = req.body;
 
     if (!encounterId) {
-      return res.status(400).json({ error: "encounterId required" });
+      return res.status(400).json({
+        error: "encounterId required"
+      });
     }
 
     const result = await storeSymptoms(encounterId, symptoms);
@@ -206,7 +170,9 @@ app.post("/clinical/notes", async (req: Request, res: Response) => {
     const { encounterId, notes } = req.body;
 
     if (!encounterId) {
-      return res.status(400).json({ error: "encounterId required" });
+      return res.status(400).json({
+        error: "encounterId required"
+      });
     }
 
     const result = await storeNotes(encounterId, notes);
@@ -239,10 +205,10 @@ app.post("/triage/nurse", async (req: Request, res: Response) => {
 
   } catch (err) {
 
-    console.error("Unhandled handler error:", err);
+    console.error("Unhandled triage error:", err);
 
     res.status(500).json({
-      error: "Unhandled server error"
+      error: "Triage failure"
     });
 
   }
@@ -268,6 +234,8 @@ app.post("/clinical/treatment-decision", async (req: Request, res: Response) => 
     }
 
     const result = await storeTreatmentDecision(encounterId, decision);
+
+    await setEncounterStage(encounterId, "treatment");
 
     res.json(result);
 
