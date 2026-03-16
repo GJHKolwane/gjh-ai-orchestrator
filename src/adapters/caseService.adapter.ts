@@ -6,9 +6,15 @@ CASE SERVICE CONFIG
 
 import { enqueueOfflineItem } from "../offline/offlineQueue";
 
+/*
+IMPORTANT:
+Services inside Codespaces should communicate
+via localhost instead of the public forwarded URL.
+*/
+
 const CASE_API =
   process.env.CASE_API ||
-  "https://studious-eureka-97r6r77x6rqr2p4gv-5050.app.github.dev";
+  "http://localhost:5050";
 
 /*
 ================================================
