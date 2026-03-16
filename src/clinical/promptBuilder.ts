@@ -2,7 +2,6 @@
 ================================================
 CLINICAL PROMPT BUILDER
 ================================================
-
 Builds structured AI prompt for triage analysis
 based on nurse inputs and patient timeline
 */
@@ -25,13 +24,24 @@ Heart Rate: ${vitals.heartRate || "not recorded"}
 
   /*
   ================================================
-  FORMAT SYMPTOMS
+  FORMAT SYMPTOMS (handles free text + objects)
   ================================================
   */
 
-  const symptomText = Array.isArray(symptoms) && symptoms.length > 0
-    ? symptoms.map((s) => `- ${s.name}`).join("\n")
-    : "No symptoms recorded.";
+  let symptomText = "No symptoms recorded.";
+
+  if (symptoms && symptoms.length) {
+
+    symptomText = symptoms
+      .map((s) => {
+        if (typeof s === "string") return `- ${s}`;
+        if (s?.name) return `- ${s.name}`;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
+
+  }
 
   /*
   ================================================
@@ -40,7 +50,7 @@ Heart Rate: ${vitals.heartRate || "not recorded"}
   */
 
   const notesText = notes && notes.length
-    ? notes.map((n) => `- ${n}`).join("\n")
+    ? notes.map((n) => `- ${typeof n === "string" ? n : n.note || n}`).join("\n")
     : "No nurse notes recorded.";
 
   /*
@@ -89,7 +99,6 @@ OUTPUT FORMAT (JSON ONLY):
   "aiSuggestion": ""
 }
 
-Do NOT include explanations outside the JSON.
+Return ONLY valid JSON.
 `;
-
 }
