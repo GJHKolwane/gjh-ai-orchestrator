@@ -37,13 +37,51 @@ export async function nurseTriageHandler(req: Request, res: Response) {
     ==========================================
     */
 
-    const timeline = await getEncounterTimeline(encounterId);
+    const timelineResponse = await getEncounterTimeline(encounterId);
 
-    const { patient, timeline: events } = timeline;
+    if (!timelineResponse) {
+      return res.status(404).json({
+        error: "Encounter timeline not found"
+      });
+    }
 
-    const latestVitals = events.vitals?.slice(-1)[0] || {};
-    const symptoms = events.symptoms || [];
-    const notes = events.notes || [];
+    const patient = timelineResponse.patient;
+    const events = timelineResponse.timeline || {};
+
+    /*
+    ==========================================
+    EXTRACT CLINICAL DATA
+    ==========================================
+    */
+
+    const vitalsEvents = events.vitals || [];
+    const symptomsEvents = events.symptoms || [];
+    const notesEvents = events.notes || [];
+    const doctorNotesEvents = events.doctorNotes || [];
+
+    const latestVitalsEvent = vitalsEvents.length
+      ? vitalsEvents[vitalsEvents.length - 1]
+      : null;
+
+    const latestVitals = latestVitalsEvent?.data || {};
+
+    const symptoms = symptomsEvents.map((e: any) => e.data || e);
+    const notes = notesEvents.map((e: any) => e.data || e);
+    const doctorNotes = doctorNotesEvents.map((e: any) => e.data || e);
+
+    /*
+    ==========================================
+    VALIDATE DATA FOR TRIAGE
+    ==========================================
+    */
+
+    if (!latestVitals && symptoms.length === 0) {
+
+      return res.status(400).json({
+        error: "No clinical data available for triage"
+      });
+
+    }
 
     /*
     ==========================================
@@ -55,7 +93,7 @@ export async function nurseTriageHandler(req: Request, res: Response) {
       patient,
       latestVitals,
       symptoms,
-      notes
+      [...notes, ...doctorNotes]
     );
 
     let parsed;
@@ -87,7 +125,7 @@ export async function nurseTriageHandler(req: Request, res: Response) {
 
       } catch (parseErr) {
 
-        console.warn("AI returned invalid JSON, falling back to offline triage");
+        console.warn("AI returned invalid JSON — switching to offline triage");
 
         parsed = runOfflineTriage(patient, latestVitals, symptoms);
 
@@ -107,6 +145,8 @@ export async function nurseTriageHandler(req: Request, res: Response) {
 
       parsed = runOfflineTriage(patient, latestVitals, symptoms);
 
+      parsed.source = "OFFLINE_RULE_ENGINE";
+
     }
 
     /*
@@ -116,6 +156,7 @@ export async function nurseTriageHandler(req: Request, res: Response) {
     */
 
     await storeAITriage(encounterId, {
+      actor: "AI_TRIAGE",
       model: parsed.source || "OFFLINE_RULE_ENGINE",
       riskLevel: parsed.riskLevel,
       observations: parsed.observations,
@@ -146,4 +187,4 @@ export async function nurseTriageHandler(req: Request, res: Response) {
 
   }
 
-      }
+}
