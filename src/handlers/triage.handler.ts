@@ -11,12 +11,12 @@ import {
 import { buildClinicalPrompt } from "../clinical/promptBuilder.js";
 import { runOfflineTriage } from "../clinical/offlineTriageEngine.js";
 
+import { runClinicalSafetyChecks } from "../clinical/clinicalSafety.engine.js";
+
 /*
 ================================================
 AI TRIAGE HANDLER
 ================================================
-Runs AI triage and falls back to offline rules
-when AI services are unreachable.
 */
 
 export async function nurseTriageHandler(req: Request, res: Response) {
@@ -33,7 +33,7 @@ export async function nurseTriageHandler(req: Request, res: Response) {
 
     /*
     ==========================================
-    LOAD CLINICAL TIMELINE
+    LOAD TIMELINE
     ==========================================
     */
 
@@ -48,20 +48,13 @@ export async function nurseTriageHandler(req: Request, res: Response) {
     const patient = timelineResponse.patient;
     const events = timelineResponse.timeline || {};
 
-    /*
-    ==========================================
-    EXTRACT CLINICAL DATA
-    ==========================================
-    */
-
     const vitalsEvents = events.vitals || [];
     const symptomsEvents = events.symptoms || [];
     const notesEvents = events.notes || [];
     const doctorNotesEvents = events.doctorNotes || [];
 
-    const latestVitalsEvent = vitalsEvents.length
-      ? vitalsEvents[vitalsEvents.length - 1]
-      : null;
+    const latestVitalsEvent =
+      vitalsEvents.length > 0 ? vitalsEvents[vitalsEvents.length - 1] : null;
 
     const latestVitals = latestVitalsEvent?.data || {};
 
@@ -71,17 +64,15 @@ export async function nurseTriageHandler(req: Request, res: Response) {
 
     /*
     ==========================================
-    VALIDATE DATA FOR TRIAGE
+    CLINICAL SAFETY LAYER
     ==========================================
     */
 
-    if (!latestVitals && symptoms.length === 0) {
-
-      return res.status(400).json({
-        error: "No clinical data available for triage"
-      });
-
-    }
+    const safety = runClinicalSafetyChecks(
+      patient,
+      latestVitals,
+      symptoms
+    );
 
     /*
     ==========================================
@@ -96,36 +87,32 @@ export async function nurseTriageHandler(req: Request, res: Response) {
       [...notes, ...doctorNotes]
     );
 
+    const safetySection =
+      safety.alerts.length > 0
+        ? "\nSAFETY ALERTS:\n" +
+          safety.alerts.map(a => `- ${a.message}`).join("\n")
+        : "";
+
+    const finalPrompt = prompt + safetySection;
+
     let parsed;
 
     try {
-
-      /*
-      ==========================================
-      RUN CLOUD AI
-      ==========================================
-      */
 
       const aiResult = await orchestrateAI({
         consultationId: encounterId,
         actor: "AI_TRIAGE",
         mode: AIMode.CLINICAL,
-        prompt
+        prompt: finalPrompt
       });
-
-      /*
-      ==========================================
-      PARSE AI OUTPUT SAFELY
-      ==========================================
-      */
 
       try {
 
         parsed = JSON.parse(aiResult.output);
 
-      } catch (parseErr) {
+      } catch {
 
-        console.warn("AI returned invalid JSON — switching to offline triage");
+        console.warn("AI JSON parse failed — using offline triage");
 
         parsed = runOfflineTriage(patient, latestVitals, symptoms);
 
@@ -133,15 +120,9 @@ export async function nurseTriageHandler(req: Request, res: Response) {
 
       parsed.source = aiResult.source;
 
-    } catch (aiError) {
+    } catch {
 
-      /*
-      ==========================================
-      OFFLINE FALLBACK
-      ==========================================
-      */
-
-      console.warn("AI unreachable — switching to offline triage");
+      console.warn("AI unavailable — offline triage");
 
       parsed = runOfflineTriage(patient, latestVitals, symptoms);
 
@@ -158,6 +139,7 @@ export async function nurseTriageHandler(req: Request, res: Response) {
     await storeAITriage(encounterId, {
       actor: "AI_TRIAGE",
       model: parsed.source || "OFFLINE_RULE_ENGINE",
+      safetyAlerts: safety.alerts,
       riskLevel: parsed.riskLevel,
       observations: parsed.observations,
       considerations: parsed.considerations,
@@ -174,6 +156,7 @@ export async function nurseTriageHandler(req: Request, res: Response) {
 
     res.json({
       encounterId,
+      safetyAlerts: safety.alerts,
       triage: parsed
     });
 
