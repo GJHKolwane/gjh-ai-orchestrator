@@ -6,6 +6,7 @@ import { syncOfflineQueue } from "./offline/offlineSync.js";
 import { nurseTriageHandler } from "./handlers/triage.handler.js";
 import { prescriptionHandler } from "./handlers/prescription.handler.js";
 import { prescriptionEvaluationHandler } from "./handlers/prescriptionEvaluation.handler.js";
+import { prescriptionConfirmHandler } from "./handlers/prescriptionConfirm.handler.js";
 
 import {
   createPatient,
@@ -21,12 +22,6 @@ import { sendHeartbeat } from "./offline/heartbeatSender.js";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 8087;
-
-/*
-================================================
-MIDDLEWARE
-================================================
-*/
 
 app.use(cors());
 app.use(express.json());
@@ -77,18 +72,13 @@ app.post("/clinical/intake", async (req: Request, res: Response) => {
 
     await setEncounterStage(encounterId, "intake");
 
-    res.json({
-      patientId,
-      encounterId
-    });
+    res.json({ patientId, encounterId });
 
   } catch (err) {
 
     console.error("INTAKE ERROR:", err);
 
-    res.status(500).json({
-      error: "Patient intake failed"
-    });
+    res.status(500).json({ error: "Patient intake failed" });
 
   }
 
@@ -96,7 +86,7 @@ app.post("/clinical/intake", async (req: Request, res: Response) => {
 
 /*
 ================================================
-STORE VITALS
+VITALS
 ================================================
 */
 
@@ -120,11 +110,7 @@ app.post("/clinical/vitals", async (req: Request, res: Response) => {
 
   } catch (err) {
 
-    console.error("Vitals error:", err);
-
-    res.status(500).json({
-      error: "Failed to store vitals"
-    });
+    res.status(500).json({ error: "Failed to store vitals" });
 
   }
 
@@ -132,7 +118,7 @@ app.post("/clinical/vitals", async (req: Request, res: Response) => {
 
 /*
 ================================================
-STORE SYMPTOMS
+SYMPTOMS
 ================================================
 */
 
@@ -143,22 +129,16 @@ app.post("/clinical/symptoms", async (req: Request, res: Response) => {
     const { encounterId, symptoms } = req.body;
 
     if (!encounterId) {
-      return res.status(400).json({
-        error: "encounterId required"
-      });
+      return res.status(400).json({ error: "encounterId required" });
     }
 
     const result = await storeSymptoms(encounterId, symptoms);
 
     res.json(result);
 
-  } catch (err) {
+  } catch {
 
-    console.error("Symptoms error:", err);
-
-    res.status(500).json({
-      error: "Failed to store symptoms"
-    });
+    res.status(500).json({ error: "Failed to store symptoms" });
 
   }
 
@@ -166,7 +146,7 @@ app.post("/clinical/symptoms", async (req: Request, res: Response) => {
 
 /*
 ================================================
-STORE NURSE NOTES
+NOTES
 ================================================
 */
 
@@ -177,22 +157,16 @@ app.post("/clinical/notes", async (req: Request, res: Response) => {
     const { encounterId, notes } = req.body;
 
     if (!encounterId) {
-      return res.status(400).json({
-        error: "encounterId required"
-      });
+      return res.status(400).json({ error: "encounterId required" });
     }
 
     const result = await storeNotes(encounterId, notes);
 
     res.json(result);
 
-  } catch (err) {
+  } catch {
 
-    console.error("Notes error:", err);
-
-    res.status(500).json({
-      error: "Failed to store notes"
-    });
+    res.status(500).json({ error: "Failed to store notes" });
 
   }
 
@@ -204,23 +178,7 @@ AI TRIAGE
 ================================================
 */
 
-app.post("/triage/nurse", async (req: Request, res: Response) => {
-
-  try {
-
-    await nurseTriageHandler(req, res);
-
-  } catch (err) {
-
-    console.error("Unhandled triage error:", err);
-
-    res.status(500).json({
-      error: "Triage failure"
-    });
-
-  }
-
-});
+app.post("/triage/nurse", nurseTriageHandler);
 
 /*
 ================================================
@@ -230,61 +188,39 @@ TREATMENT DECISION
 
 app.post("/clinical/treatment-decision", async (req: Request, res: Response) => {
 
-  try {
+  const { encounterId, decision } = req.body;
 
-    const { encounterId, decision } = req.body;
-
-    if (!encounterId) {
-      return res.status(400).json({
-        error: "encounterId required"
-      });
-    }
-
-    const result = await storeTreatmentDecision(encounterId, decision);
-
-    await setEncounterStage(encounterId, "treatment");
-
-    res.json(result);
-
-  } catch (err) {
-
-    console.error("Treatment decision error:", err);
-
-    res.status(500).json({
-      error: "Failed to store treatment decision"
-    });
-
+  if (!encounterId) {
+    return res.status(400).json({ error: "encounterId required" });
   }
+
+  const result = await storeTreatmentDecision(encounterId, decision);
+
+  await setEncounterStage(encounterId, "treatment");
+
+  res.json(result);
 
 });
 
 /*
 ================================================
-PRESCRIPTION EVALUATION (🔥 CORE BRIDGE)
+PRESCRIPTION EVALUATION
 ================================================
 */
 
-app.post("/clinical/prescription/evaluate", async (req: Request, res: Response) => {
-
-  try {
-
-    await prescriptionEvaluationHandler(req, res);
-
-  } catch (err) {
-
-    console.error("Prescription evaluation error:", err);
-
-    res.status(500).json({
-      error: "Prescription evaluation failed"
-    });
-
-  }
-
-});
+app.post("/clinical/prescription/evaluate", prescriptionEvaluationHandler);
 
 /*
 ================================================
-PRESCRIPTION (LEGACY / EXTENSION)
+PRESCRIPTION CONFIRM (🔥 NEW)
+================================================
+*/
+
+app.post("/clinical/prescription/confirm", prescriptionConfirmHandler);
+
+/*
+================================================
+LEGACY PRESCRIPTION
 ================================================
 */
 
@@ -304,14 +240,13 @@ app.listen(PORT, "0.0.0.0", () => {
 
 /*
 ================================================
-AUTO HEARTBEAT LOOP
+BACKGROUND TASKS
 ================================================
 */
 
 setInterval(() => {
 
   sendHeartbeat();
-
   syncOfflineQueue();
 
 }, 30000);
