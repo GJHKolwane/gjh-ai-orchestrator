@@ -1,34 +1,70 @@
 import { createAIAdapter } from "../adapters/ai.factory.js";
 import { ConsoleAuditLogger, createAuditEvent } from "./audit.logger.js";
 import { assertAIModeAllows } from "./ai.guards.js";
-/**
- * Core AI Orchestrator
- */
+import { enforceHumanGate } from "../governance/humanGate.guard.js";
 export async function orchestrateAI(input, auditLogger = new ConsoleAuditLogger()) {
     const { consultationId, actor, mode, intent = {}, prompt } = input;
-    // 🔒 1️⃣ HARD GOVERNANCE CHECK
+    /*
+    ======================================================
+    1️⃣ HARD GOVERNANCE CHECK
+    ======================================================
+    */
     assertAIModeAllows(mode, intent);
-    // 🧾 2️⃣ Audit invocation
+    /*
+    ======================================================
+    2️⃣ AUDIT INPUT
+    ======================================================
+    */
     await auditLogger.log(createAuditEvent(consultationId, actor, "INPUT_RECEIVED", `AI invoked in mode ${mode}`, { mode, intent }));
-    // 🧠 3️⃣ Resolve adapter
+    /*
+    ======================================================
+    3️⃣ CHECK AI CONFIG
+    ======================================================
+    */
+    console.log("AI Provider:", process.env.AI_PROVIDER);
+    console.log("OpenAI Key Loaded:", !!process.env.OPENAI_API_KEY);
+    /*
+    ======================================================
+    4️⃣ RESOLVE AI ADAPTER
+    ======================================================
+    */
     const aiAdapter = createAIAdapter();
-    // ⚙️ 4️⃣ Generate AI output
-    // IMPORTANT: pass as `text` for Vertex compatibility
+    /*
+    ======================================================
+    5️⃣ GENERATE AI OUTPUT
+    ======================================================
+    */
     const result = await aiAdapter.generateCompletion({
         text: prompt
     });
     if (!result?.text) {
+        console.error("AI adapter returned empty result");
         throw new Error("AI adapter returned empty response");
     }
-    // 🧾 5️⃣ Audit output preview
+    console.log("RAW AI OUTPUT:\n", result.text);
+    /*
+    ======================================================
+    6️⃣ HUMAN SAFETY GATE
+    ======================================================
+    */
+    const safeOutput = enforceHumanGate(result.text);
+    /*
+    ======================================================
+    7️⃣ AUDIT OUTPUT
+    ======================================================
+    */
     await auditLogger.log(createAuditEvent(consultationId, "AI_TRIAGE", "AI_SUGGESTION", "AI generated output", {
         mode,
-        outputPreview: result.text.slice(0, 300)
+        outputPreview: safeOutput.slice(0, 300)
     }));
-    // ✅ 6️⃣ Return governed output
+    /*
+    ======================================================
+    8️⃣ RETURN RESULT
+    ======================================================
+    */
     return {
-        source: process.env.AI_PROVIDER || "mock",
+        source: process.env.AI_PROVIDER || "UNKNOWN_AI_PROVIDER",
         timestamp: new Date().toISOString(),
-        output: result.text
+        output: safeOutput
     };
 }

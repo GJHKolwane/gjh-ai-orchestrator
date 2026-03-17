@@ -1,26 +1,26 @@
-import { MockAIAdapter } from "./mock.adapter.js";
-import { VertexAIAdapter } from "./vertex.adapter.js";
-import { VertexAI } from "@google-cloud/vertexai";
+import { OpenAIAdapter } from "./openai.adapter.js";
+import OpenAI from "openai";
+/*
+================================================
+AI ADAPTER FACTORY
+================================================
+Resolves AI provider. Production requires OpenAI.
+*/
 export function createAIAdapter() {
-    const provider = process.env.AI_PROVIDER || "mock";
-    switch (provider) {
-        case "vertex": {
-            const project = process.env.GCP_PROJECT_ID;
-            const location = process.env.GCP_LOCATION || "us-central1";
-            if (!project) {
-                throw new Error("GCP_PROJECT_ID must be set when using Vertex AI adapter");
-            }
-            const vertex = new VertexAI({
-                project,
-                location
-            });
-            const model = vertex.getGenerativeModel({
-                model: "gemini-1.5-flash" // safer model
-            });
-            return new VertexAIAdapter(model);
-        }
-        case "mock":
-        default:
-            return new MockAIAdapter();
+    const provider = process.env.AI_PROVIDER;
+    if (!provider) {
+        throw new Error("AI_PROVIDER environment variable must be set (expected: 'openai')");
     }
+    if (provider.toLowerCase() !== "openai") {
+        throw new Error(`Unsupported AI_PROVIDER '${provider}'. Only 'openai' is allowed.`);
+    }
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new Error("OPENAI_API_KEY must be set when using OpenAI adapter");
+    }
+    console.log("AI Provider selected: OpenAI");
+    const client = new OpenAI({
+        apiKey
+    });
+    return new OpenAIAdapter(client);
 }

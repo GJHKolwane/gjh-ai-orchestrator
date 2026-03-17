@@ -1,211 +1,178 @@
-/*
-================================================
-CASE SERVICE CONFIG
-================================================
-*/
-
 import { enqueueOfflineItem } from "../offline/offlineQueue";
-
-/*
-IMPORTANT:
-Services inside Codespaces should communicate
-via localhost instead of the public forwarded URL.
-*/
 
 const CASE_API =
   process.env.CASE_API ||
-  "http://localhost:5050";
+    "http://localhost:5050";
 
-/*
-================================================
-SAFE REQUEST WRAPPER
-Handles offline fallback automatically
-================================================
-*/
+    /*
+    ================================================
+    SAFE REQUEST WRAPPER
+    ================================================
+    */
 
-async function safeRequest(endpoint: string, method: string, payload?: any) {
+    async function safeRequest(endpoint: string, method: string, payload?: any) {
 
-  try {
+      try {
 
-    const res = await fetch(`${CASE_API}${endpoint}`, {
-      method,
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: payload ? JSON.stringify(payload) : undefined
-    });
+          const res = await fetch(`${CASE_API}${endpoint}`, {
+                method,
+                      headers: {
+                              "Content-Type": "application/json"
+                                    },
+                                          body: payload ? JSON.stringify(payload) : undefined
+                                              });
 
-    if (!res.ok) {
+                                                  const text = await res.text();
 
-      console.warn("CASE service error — storing offline:", endpoint);
+                                                      let data: any = {};
+                                                          try {
+                                                                data = text ? JSON.parse(text) : {};
+                                                                    } catch {
+                                                                          data = {};
+                                                                              }
 
-      enqueueOfflineItem({
-        endpoint,
-        method,
-        payload
-      });
+                                                                                  if (!res.ok) {
 
-      return { status: "stored_offline" };
+                                                                                        console.warn("CASE service error:", endpoint, res.status);
 
-    }
+                                                                                              enqueueOfflineItem({
+                                                                                                      endpoint,
+                                                                                                              method,
+                                                                                                                      payload
+                                                                                                                            });
 
-    return res.json();
+                                                                                                                                  return { status: "stored_offline" };
 
-  } catch (err) {
+                                                                                                                                      }
 
-    console.warn("CASE service unreachable — storing offline:", endpoint);
+                                                                                                                                          return data;
 
-    enqueueOfflineItem({
-      endpoint,
-      method,
-      payload
-    });
+                                                                                                                                            } catch (err) {
 
-    return { status: "stored_offline" };
+                                                                                                                                                console.warn("CASE unreachable:", endpoint);
 
-  }
+                                                                                                                                                    enqueueOfflineItem({
+                                                                                                                                                          endpoint,
+                                                                                                                                                                method,
+                                                                                                                                                                      payload
+                                                                                                                                                                          });
 
-}
+                                                                                                                                                                              return { status: "stored_offline" };
 
-/*
-================================================
-CREATE PATIENT
-================================================
-*/
+                                                                                                                                                                                }
 
-export async function createPatient(data: any) {
+                                                                                                                                                                                }
 
-  return safeRequest("/patients", "POST", data);
+                                                                                                                                                                                /*
+                                                                                                                                                                                ================================================
+                                                                                                                                                                                CREATE PATIENT
+                                                                                                                                                                                ================================================
+                                                                                                                                                                                */
 
-}
+                                                                                                                                                                                export async function createPatient(data: any) {
+                                                                                                                                                                                  return safeRequest("/patients", "POST", data);
+                                                                                                                                                                                  }
 
-/*
-================================================
-CREATE ENCOUNTER
-================================================
-*/
+                                                                                                                                                                                  /*
+                                                                                                                                                                                  ================================================
+                                                                                                                                                                                  CREATE ENCOUNTER
+                                                                                                                                                                                  ================================================
+                                                                                                                                                                                  */
 
-export async function createEncounter(patientId: string) {
+                                                                                                                                                                                  export async function createEncounter(patientId: string) {
+                                                                                                                                                                                    return safeRequest("/encounters", "POST", { patientId });
+                                                                                                                                                                                    }
 
-  return safeRequest("/encounters", "POST", { patientId });
+                                                                                                                                                                                    /*
+                                                                                                                                                                                    ================================================
+                                                                                                                                                                                    SET ENCOUNTER STAGE
+                                                                                                                                                                                    ================================================
+                                                                                                                                                                                    */
 
-}
+                                                                                                                                                                                    export async function setEncounterStage(encounterId: string, stage: string) {
+                                                                                                                                                                                      return safeRequest(`/encounters/${encounterId}/stage`, "POST", { stage });
+                                                                                                                                                                                      }
 
-/*
-================================================
-SET ENCOUNTER STAGE
-================================================
-*/
+                                                                                                                                                                                      /*
+                                                                                                                                                                                      ================================================
+                                                                                                                                                                                      STORE VITALS
+                                                                                                                                                                                      ================================================
+                                                                                                                                                                                      */
 
-export async function setEncounterStage(encounterId: string, stage: string) {
+                                                                                                                                                                                      export async function storeVitals(encounterId: string, vitals: any) {
+                                                                                                                                                                                        return safeRequest(`/encounters/${encounterId}/vitals`, "POST", vitals);
+                                                                                                                                                                                        }
 
-  return safeRequest(`/encounters/${encounterId}/stage`, "POST", { stage });
+                                                                                                                                                                                        /*
+                                                                                                                                                                                        ================================================
+                                                                                                                                                                                        STORE SYMPTOMS
+                                                                                                                                                                                        ================================================
+                                                                                                                                                                                        */
 
-}
+                                                                                                                                                                                        export async function storeSymptoms(encounterId: string, symptoms: any) {
+                                                                                                                                                                                          return safeRequest(`/encounters/${encounterId}/symptoms`, "POST", symptoms);
+                                                                                                                                                                                          }
 
-/*
-================================================
-STORE VITALS
-================================================
-*/
+                                                                                                                                                                                          /*
+                                                                                                                                                                                          ================================================
+                                                                                                                                                                                          STORE NOTES
+                                                                                                                                                                                          ================================================
+                                                                                                                                                                                          */
 
-export async function storeVitals(encounterId: string, vitals: any) {
+                                                                                                                                                                                          export async function storeNotes(encounterId: string, notes: any) {
+                                                                                                                                                                                            return safeRequest(`/encounters/${encounterId}/notes`, "POST", { notes });
+                                                                                                                                                                                            }
 
-  return safeRequest(`/encounters/${encounterId}/vitals`, "POST", vitals);
+                                                                                                                                                                                            /*
+                                                                                                                                                                                            ================================================
+                                                                                                                                                                                            STORE DOCTOR NOTES
+                                                                                                                                                                                            ================================================
+                                                                                                                                                                                            */
 
-}
+                                                                                                                                                                                            export async function storeDoctorNotes(encounterId: string, notes: any) {
+                                                                                                                                                                                              return safeRequest(`/encounters/${encounterId}/doctor-notes`, "POST", notes);
+                                                                                                                                                                                              }
 
-/*
-================================================
-STORE SYMPTOMS
-================================================
-*/
+                                                                                                                                                                                              /*
+                                                                                                                                                                                              ================================================
+                                                                                                                                                                                              TIMELINE
+                                                                                                                                                                                              ================================================
+                                                                                                                                                                                              */
 
-export async function storeSymptoms(encounterId: string, symptoms: any) {
+                                                                                                                                                                                              export async function getEncounterTimeline(encounterId: string) {
 
-  return safeRequest(`/encounters/${encounterId}/symptoms`, "POST", symptoms);
+                                                                                                                                                                                                const res = await fetch(`${CASE_API}/encounters/${encounterId}/timeline`);
 
-}
+                                                                                                                                                                                                  if (!res.ok) {
+                                                                                                                                                                                                      throw new Error("Timeline fetch failed");
+                                                                                                                                                                                                        }
 
-/*
-================================================
-STORE NURSE NOTES
-================================================
-*/
+                                                                                                                                                                                                          return res.json();
+                                                                                                                                                                                                          }
 
-export async function storeNotes(encounterId: string, notes: any) {
+                                                                                                                                                                                                          /*
+                                                                                                                                                                                                          ================================================
+                                                                                                                                                                                                          AI TRIAGE
+                                                                                                                                                                                                          ================================================
+                                                                                                                                                                                                          */
 
-  return safeRequest(`/encounters/${encounterId}/notes`, "POST", { notes });
+                                                                                                                                                                                                          export async function storeAITriage(encounterId: string, triage: any) {
+                                                                                                                                                                                                            return safeRequest(`/encounters/${encounterId}/triage`, "POST", triage);
+                                                                                                                                                                                                            }
 
-}
+                                                                                                                                                                                                            /*
+                                                                                                                                                                                                            ================================================
+                                                                                                                                                                                                            TREATMENT DECISION
+                                                                                                                                                                                                            ================================================
+                                                                                                                                                                                                            */
 
-/*
-================================================
-STORE DOCTOR NOTES
-================================================
-*/
-
-export async function storeDoctorNotes(encounterId: string, notes: any) {
-
-  return safeRequest(`/encounters/${encounterId}/doctor-notes`, "POST", notes);
-
-}
-
-/*
-================================================
-FETCH TIMELINE
-================================================
-*/
-
-export async function getEncounterTimeline(encounterId: string) {
-
-  try {
-
-    const res = await fetch(`${CASE_API}/encounters/${encounterId}/timeline`);
-
-    if (!res.ok) {
-      throw new Error("Timeline fetch failed");
-    }
-
-    return res.json();
-
-  } catch (err) {
-
-    console.error("Timeline fetch error:", err);
-
-    throw err;
-
-  }
-
-}
-
-/*
-================================================
-STORE AI TRIAGE
-================================================
-*/
-
-export async function storeAITriage(encounterId: string, triage: any) {
-
-  return safeRequest(`/encounters/${encounterId}/triage`, "POST", triage);
-
-}
-
-/*
-================================================
-STORE TREATMENT DECISION
-================================================
-*/
-
-export async function storeTreatmentDecision(
-  encounterId: string,
-  decision: any
-) {
-
-  return safeRequest(
-    `/encounters/${encounterId}/treatment-decision`,
-    "POST",
-    decision
-  );
-
-}
+                                                                                                                                                                                                            export async function storeTreatmentDecision(
+                                                                                                                                                                                                              encounterId: string,
+                                                                                                                                                                                                                decision: any
+                                                                                                                                                                                                                ) {
+                                                                                                                                                                                                                  return safeRequest(
+                                                                                                                                                                                                                      `/encounters/${encounterId}/treatment-decision`,
+                                                                                                                                                                                                                          "POST",
+                                                                                                                                                                                                                              decision
+                                                                                                                                                                                                                                );
+                                                                                                                                                                                                                                }

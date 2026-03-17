@@ -1,35 +1,27 @@
-/**
- * AI Modes
- *
- * Each mode strictly defines what the AI is allowed to do.
- * Modes are enforced by guards before and after AI execution.
- */
+/*
+=====================================================
+AI OPERATING MODES
+=====================================================
+
+Defines what type of reasoning the AI is allowed to perform.
+These modes are enforced by the AI guardrails.
+*/
 export var AIMode;
 (function (AIMode) {
-    AIMode["TRIAGE"] = "TRIAGE";
-    AIMode["SAFETY_ASSIST"] = "SAFETY_ASSIST";
-    AIMode["INVESTIGATIVE"] = "INVESTIGATIVE"; // Phase 2 (Doctor only)
+    /*
+      General assistant behaviour
+        */
+    AIMode["GENERAL"] = "GENERAL";
+    /*
+      Clinical reasoning (triage, diagnosis assistance)
+        */
+    AIMode["CLINICAL"] = "CLINICAL";
+    /*
+      Medication reasoning
+        */
+    AIMode["PRESCRIPTION"] = "PRESCRIPTION";
+    /*
+      Administrative reasoning
+        */
+    AIMode["ADMIN"] = "ADMIN";
 })(AIMode || (AIMode = {}));
-/**
- * Capabilities allowed per AI mode
- */
-export const AIModeCapabilities = {
-    [AIMode.TRIAGE]: {
-        allowDiagnosis: false,
-        allowComparisons: false,
-        allowProceduralGuidance: false,
-        allowMonitoring: true
-    },
-    [AIMode.SAFETY_ASSIST]: {
-        allowDiagnosis: false,
-        allowComparisons: false,
-        allowProceduralGuidance: true,
-        allowMonitoring: true
-    },
-    [AIMode.INVESTIGATIVE]: {
-        allowDiagnosis: false, // still assistive
-        allowComparisons: true,
-        allowProceduralGuidance: false,
-        allowMonitoring: false
-    }
-};
