@@ -5,6 +5,7 @@ import { syncOfflineQueue } from "./offline/offlineSync.js";
 
 import { nurseTriageHandler } from "./handlers/triage.handler.js";
 import { prescriptionHandler } from "./handlers/prescription.handler.js";
+import { prescriptionEvaluationHandler } from "./handlers/prescriptionEvaluation.handler.js";
 
 import {
   createPatient,
@@ -20,6 +21,12 @@ import { sendHeartbeat } from "./offline/heartbeatSender.js";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 8087;
+
+/*
+================================================
+MIDDLEWARE
+================================================
+*/
 
 app.use(cors());
 app.use(express.json());
@@ -253,7 +260,31 @@ app.post("/clinical/treatment-decision", async (req: Request, res: Response) => 
 
 /*
 ================================================
-PRESCRIPTION
+PRESCRIPTION EVALUATION (🔥 CORE BRIDGE)
+================================================
+*/
+
+app.post("/clinical/prescription/evaluate", async (req: Request, res: Response) => {
+
+  try {
+
+    await prescriptionEvaluationHandler(req, res);
+
+  } catch (err) {
+
+    console.error("Prescription evaluation error:", err);
+
+    res.status(500).json({
+      error: "Prescription evaluation failed"
+    });
+
+  }
+
+});
+
+/*
+================================================
+PRESCRIPTION (LEGACY / EXTENSION)
 ================================================
 */
 
