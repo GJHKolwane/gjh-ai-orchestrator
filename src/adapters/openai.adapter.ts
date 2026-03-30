@@ -1,15 +1,13 @@
 import OpenAI from "openai";
-import { AIAdapter } from "./ai.adapter.js";
 
 /*
 ================================================
 OPENAI ADAPTER
 ================================================
-Implements AIAdapter interface using OpenAI API
+Handles communication with OpenAI API
 */
 
-export class OpenAIAdapter implements AIAdapter {
-
+export class OpenAIAdapter {
   private client: OpenAI;
 
   constructor(client: OpenAI) {
@@ -18,68 +16,58 @@ export class OpenAIAdapter implements AIAdapter {
 
   /*
   ================================================
-  GENERATE COMPLETION
+  BASE COMPLETION
   ================================================
   */
 
   async generateCompletion({ text }: { text: string }) {
-
     const response = await this.client.chat.completions.create({
-
       model: "gpt-4o-mini",
 
       messages: [
-
         {
           role: "system",
           content: `
-You are a clinical triage assistant.
+You are a clinical AI assistant.
 
-Your job is to analyse symptoms, vitals and notes and produce
-a structured triage assessment.
-
-IMPORTANT RULES:
-- Do NOT prescribe medication
-- Do NOT give treatment instructions
-- Only provide triage analysis
-
-You MUST return valid JSON ONLY in the following format:
-
-{
-  "riskLevel": "LOW | MEDIUM | HIGH",
-  "observations": ["clinical observations"],
-  "considerations": ["possible clinical considerations"],
-  "reasoning": "short reasoning summary",
-  "aiSuggestion": "optional suggestion or null"
-}
-`
+RULES:
+- DO NOT make decisions
+- DO NOT prescribe treatment
+- ONLY provide structured clinical analysis
+- RETURN VALID JSON ONLY
+          `,
         },
-
         {
           role: "user",
-          content: text
-        }
-
+          content: text,
+        },
       ],
 
       temperature: 0.2,
 
-      /*
-      ================================================
-      FORCE JSON RESPONSE
-      ================================================
-      */
-
-      response_format: { type: "json_object" }
-
+      response_format: { type: "json_object" },
     });
 
     const output = response.choices?.[0]?.message?.content || "";
 
     return {
-      text: output
+      text: output,
     };
-
   }
 
+  /*
+  ================================================
+  STRUCTURED OUTPUT (USED BY PIPELINE)
+  ================================================
+  */
+
+  async generateStructured(prompt: string) {
+    const result = await this.generateCompletion({ text: prompt });
+
+    try {
+      return JSON.parse(result.text);
+    } catch (err) {
+      throw new Error("AI returned invalid JSON");
+    }
+  }
 }
