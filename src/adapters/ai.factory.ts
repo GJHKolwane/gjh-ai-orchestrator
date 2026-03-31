@@ -6,10 +6,10 @@ export class AIFactory {
   private provider: AIProvider;
 
   constructor() {
-    // Default provider (can be changed via ENV later)
-    this.provider = process.env.AI_PROVIDER as AIProvider || "openrouter";
+    this.provider = (process.env.AI_PROVIDER as AIProvider) || "openrouter";
   }
 
+  // 🔹 MAIN ENTRY
   async run(prompt: string) {
     switch (this.provider) {
       case "openrouter":
@@ -19,6 +19,36 @@ export class AIFactory {
       default:
         return this.runMock(prompt);
     }
+  }
+
+  // 🔥 STRUCTURED OUTPUT (FOR PIPELINE)
+  async generateStructured(prompt: string) {
+    const raw = await this.run(prompt);
+
+    try {
+      // Attempt to extract JSON safely
+      const cleaned = this.extractJSON(raw);
+      return JSON.parse(cleaned);
+    } catch (err) {
+      console.error("❌ Failed to parse AI response:", raw);
+
+      return {
+        message: "Invalid AI response format",
+        extractedSymptoms: [],
+        extractedVitals: {},
+        missingData: [],
+        riskLevel: "LOW",
+        suggestedAction: "CONTINUE",
+        explanation: ["AI response was not valid JSON"],
+        confidence: 0.2,
+      };
+    }
+  }
+
+  // 🔧 HELPER: Extract JSON from messy AI output
+  private extractJSON(text: string) {
+    const match = text.match(/\{[\s\S]*\}/);
+    return match ? match[0] : text;
   }
 
   // 🔥 OPENROUTER IMPLEMENTATION
@@ -32,19 +62,20 @@ export class AIFactory {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "openai/gpt-4o-mini", // 🔥 DEFAULT MODEL
+          model: "openai/gpt-4o-mini",
           messages: [
             {
               role: "system",
-              content: "You are a clinical assistant. Provide structured, concise, medically relevant responses."
+              content:
+                "You are a clinical assistant. Always return STRICT JSON only. No extra text.",
             },
             {
               role: "user",
-              content: prompt
-            }
+              content: prompt,
+            },
           ],
           max_tokens: 300,
-          temperature: 0.2
+          temperature: 0.2,
         }),
       }
     );
@@ -52,6 +83,7 @@ export class AIFactory {
     const data = await response.json();
 
     if (!data || !data.choices) {
+      console.error("❌ OpenRouter raw response:", data);
       throw new Error("Invalid OpenRouter response");
     }
 
@@ -60,6 +92,15 @@ export class AIFactory {
 
   // 🧪 MOCK (SAFETY FALLBACK)
   private async runMock(prompt: string) {
-    return `MOCK RESPONSE: ${prompt}`;
+    return JSON.stringify({
+      message: "Mock response",
+      extractedSymptoms: ["headache"],
+      extractedVitals: {},
+      missingData: ["temperature"],
+      riskLevel: "LOW",
+      suggestedAction: "CONTINUE",
+      explanation: ["This is a mock response"],
+      confidence: 0.5,
+    });
   }
 }
