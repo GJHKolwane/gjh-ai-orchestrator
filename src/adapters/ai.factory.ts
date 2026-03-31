@@ -4,16 +4,31 @@ type AIProvider = "openrouter" | "mock";
 
 export class AIFactory {
   private provider: AIProvider;
+  private model: string;
 
-  constructor() {
+  constructor(risk?: string) {
     this.provider = (process.env.AI_PROVIDER as AIProvider) || "openrouter";
+
+    // 🔥 MODEL ROUTING BASED ON RISK
+    if (risk === "HIGH") {
+      this.model = "openai/gpt-4o"; // strongest
+    } else if (risk === "MEDIUM") {
+      this.model = "openai/gpt-4o-mini"; // balanced
+    } else {
+      this.model = "openai/gpt-3.5-turbo"; // cheapest
+    }
   }
 
   // 🔹 MAIN ENTRY (RAW TEXT)
   async run(prompt: string) {
     switch (this.provider) {
       case "openrouter":
-        return this.runOpenRouter(prompt);
+        try {
+          return await this.runOpenRouter(prompt);
+        } catch (err) {
+          console.warn("⚠️ OpenRouter failed, falling back to MOCK");
+          return this.runMock(prompt);
+        }
 
       case "mock":
       default:
@@ -31,7 +46,7 @@ export class AIFactory {
     } catch (err) {
       console.error("❌ Failed to parse AI response:", raw);
 
-      // Safe fallback aligned with CASE-MCP expectations
+      // ✅ SAFE FALLBACK (ALIGNED WITH CASE-MCP)
       return {
         message: "Invalid AI response format",
         extractedSymptoms: [],
@@ -63,7 +78,7 @@ export class AIFactory {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "openai/gpt-4o-mini",
+          model: this.model, // 🔥 dynamic model selection
           messages: [
             {
               role: "system",
@@ -106,9 +121,9 @@ export class AIFactory {
   }
 }
 
-// 🔁 BACKWARD COMPATIBILITY (FOR EXISTING PIPELINE)
-export function getAIAdapter() {
-  const factory = new AIFactory();
+// 🔁 BACKWARD COMPATIBILITY + RISK SUPPORT
+export function getAIAdapter(risk?: string) {
+  const factory = new AIFactory(risk);
 
   return {
     generateStructured: (prompt: string) =>
@@ -116,4 +131,4 @@ export function getAIAdapter() {
 
     run: (prompt: string) => factory.run(prompt),
   };
-          }
+}
