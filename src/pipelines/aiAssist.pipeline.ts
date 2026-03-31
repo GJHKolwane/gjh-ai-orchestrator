@@ -1,4 +1,5 @@
 import { getAIAdapter } from "../adapters/ai.factory.ts";
+import { detectRisk } from "../orchestrator/risk.detector";
 
 export async function runAIAssistPipeline(input: {
   inputText: string;
@@ -6,7 +7,9 @@ export async function runAIAssistPipeline(input: {
       symptoms?: string[];
         encounterId: string;
         }) {
-          const ai = getAIAdapter();
+          const risk = detectRisk(input);
+
+const ai = getAIAdapter(risk);
 
             const prompt = `
             You are a clinical AI assistant.
