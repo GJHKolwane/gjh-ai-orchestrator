@@ -7,39 +7,67 @@ export async function runAIAssistPipeline(input: {
   symptoms?: string[];
   encounterId: string;
 }) {
-  // 🔥 STEP 1: Pre-risk detection (cheap + fast)
+  /*
+  ========================================
+  🔥 STEP 1: PRE-RISK (FAST GUARDRAIL)
+  ========================================
+  */
   const risk = detectRisk(input);
 
-  // 🔥 STEP 2: Get AI with routing
+  /*
+  ========================================
+  🔥 STEP 2: AI ROUTING (BASED ON RISK)
+  ========================================
+  */
   const ai = getAIAdapter(risk);
 
-  // 🔥 STEP 3: Strong structured prompt
+  /*
+  ========================================
+  🧠 STEP 3: CLINICAL REASONING PROMPT
+  ========================================
+  */
   const prompt = `
-You are a clinical AI assistant.
+ROLE:
+You are a clinical triage reasoning assistant operating in a telemedicine system.
 
-STRICT RULES:
-- You DO NOT make decisions
-- You DO NOT enforce actions
-- You ONLY suggest
-- You MUST return ONLY valid JSON
-- Do NOT include any text before or after JSON
+CORE PRINCIPLES:
+- You MUST perform clinical reasoning using symptoms and vitals together
+- You MUST prioritize patient safety
+- You MUST detect trauma, head injury, and abnormal vitals
+- You DO NOT prescribe treatment
+- You DO NOT replace a doctor
+- You provide structured clinical analysis only
 
-INPUT:
+CLINICAL SAFETY RULES:
+- Any head-related symptom = HIGH RISK unless clearly minor
+- Trauma indicators (e.g. "broken", "fracture", "severe pain", "bruising") increase risk
+- Elevated heart rate (>100) may indicate distress or pain
+- High blood pressure (>140 systolic) contributes to risk
+- If multiple concerning signals exist → escalate risk
+- If uncertain → choose HIGH over LOW
+
+INPUT DATA:
 Text: ${input.inputText}
-Vitals: ${JSON.stringify(input.vitals || {})}
-Symptoms: ${JSON.stringify(input.symptoms || [])}
-RiskPreAssessment: ${risk}
+
+Vitals:
+${JSON.stringify(input.vitals || {}, null, 2)}
+
+Symptoms:
+${JSON.stringify(input.symptoms || [], null, 2)}
+
+Preliminary Risk (system): ${risk}
 
 TASK:
-1. Extract symptoms
-2. Extract vitals
-3. Identify missing clinical data
-4. Estimate risk level (LOW, MEDIUM, HIGH)
-5. Suggest action (CONTINUE, ESCALATE)
-6. Provide explanation
-7. Provide confidence (0-1)
+1. Interpret symptoms semantically (not just keywords)
+2. Combine symptoms + vitals for reasoning
+3. Identify clinical concerns
+4. Identify missing critical data
+5. Determine overall risk level
+6. Suggest next action
+7. Explain reasoning clearly
+8. Provide confidence score
 
-OUTPUT FORMAT:
+OUTPUT STRICT JSON ONLY:
 {
   "message": "",
   "extractedSymptoms": [],
@@ -52,14 +80,88 @@ OUTPUT FORMAT:
 }
 `;
 
-  // 🔥 STEP 4: Execute AI
+  /*
+  ========================================
+  🚀 STEP 4: EXECUTE AI
+  ========================================
+  */
   const raw = await ai.generateStructured(prompt);
 
-  // 🔥 STEP 5: Normalize for CASE-MCP
-  return normalize(raw, risk);
+  console.log("🧠 RAW AI OUTPUT:", raw);
+
+  /*
+  ========================================
+  🛡️ STEP 5: SAFETY OVERRIDE (HARD RULES)
+  ========================================
+  */
+  const safe = applySafetyOverrides(raw, input);
+
+  /*
+  ========================================
+  🔧 STEP 6: NORMALIZE OUTPUT
+  ========================================
+  */
+  return normalize(safe, risk);
 }
 
-// 🔧 NORMALIZATION LAYER (CRITICAL FOR STABILITY)
+/*
+========================================
+🛡️ SAFETY OVERRIDE LAYER (CRITICAL)
+========================================
+*/
+function applySafetyOverrides(data: any, input: any) {
+  const symptoms = (input.symptoms || []).map((s: string) =>
+    s.toLowerCase()
+  );
+
+  let riskLevel = data?.riskLevel || "LOW";
+  let suggestedAction = data?.suggestedAction || "CONTINUE";
+  let explanation = Array.isArray(data?.explanation)
+    ? [...data.explanation]
+    : [];
+
+  // 🚨 HEAD INJURY OVERRIDE
+  if (symptoms.some((s: string) => s.includes("head"))) {
+    riskLevel = "HIGH";
+    suggestedAction = "ESCALATE";
+    explanation.push("Head-related symptom detected (safety override)");
+  }
+
+  // 🚨 TRAUMA OVERRIDE
+  if (
+    symptoms.some(
+      (s: string) =>
+        s.includes("broken") ||
+        s.includes("fracture") ||
+        s.includes("injury") ||
+        s.includes("bruise")
+    )
+  ) {
+    if (riskLevel === "LOW") {
+      riskLevel = "MEDIUM";
+    }
+    explanation.push("Trauma indicators detected");
+  }
+
+  // 🚨 MULTI-SYMPTOM ESCALATION
+  if (symptoms.length >= 3 && riskLevel !== "HIGH") {
+    riskLevel = "MEDIUM";
+    explanation.push("Multiple symptoms increase risk");
+  }
+
+  return {
+    ...data,
+    riskLevel,
+    suggestedAction,
+    explanation,
+  };
+}
+
+/*
+========================================
+🔧 NORMALIZATION LAYER (STABILITY)
+========================================
+*/
 function normalize(data: any, fallbackRisk: string) {
   return {
     message: data?.message || "",
@@ -69,7 +171,8 @@ function normalize(data: any, fallbackRisk: string) {
       : [],
 
     extractedVitals:
-      typeof data?.extractedVitals === "object" && data.extractedVitals !== null
+      typeof data?.extractedVitals === "object" &&
+      data?.extractedVitals !== null
         ? data.extractedVitals
         : {},
 
@@ -98,4 +201,4 @@ function normalize(data: any, fallbackRisk: string) {
         ? data.confidence
         : 0.5,
   };
-}
+       }
